@@ -1,0 +1,7 @@
+﻿ID,Title,Section,Section Hierarchy,Type,Priority,Preconditions,Steps,Expected Result,Steps (Separated),References
+C101,Valid sign-in,Login,Login,Smoke & Sanity,High,A registered user exists.,,"1. The form is shown
+2. The dashboard opens","1. Open the sign-in page
+2. Enter valid credentials and submit",PORTAL-12
+C102,Locked account,Login,Login,Functional,Critical,,"<p>Enter the <b>wrong</b> password &amp; submit</p>",An error is shown,,
+C103,Anmeldung über Konto 登录 🙂,Social,Login > Social,Usability,Medium,Café “Zoë” account linked.,,"Redirect works ✓",1. Choose 社交登录,
+C104,Update display name,Profile,Profile,Regression,Low,,Change the name and save,The new name is shown,,

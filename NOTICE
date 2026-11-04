@@ -1,0 +1,6 @@
+TestBuddy
+Copyright 2026 TestBuddy contributors
+
+This product includes software developed by the TestBuddy contributors.
+
+Portions adapted from the NoPM project, Apache License 2.0: the requirements traceability verifier (scripts/rtm-verify.mjs) and the MCP server pattern (JSON-RPC over Streamable HTTP, tool registry, token auth, smoke test).

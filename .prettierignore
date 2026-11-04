@@ -1,0 +1,7 @@
+.next
+node_modules
+coverage
+bin
+pb_data
+package-lock.json
+docs

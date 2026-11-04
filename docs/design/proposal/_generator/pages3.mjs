@@ -1,0 +1,110 @@
+import { page, D, ic, esc, stBadge, pri, auto, tag, badge, bar, legend, table, phoneNote, emptyState, head } from './lib.mjs';
+
+const dlg = (id, title, body, foot) => `<dialog id="${id}" aria-labelledby="${id}-t"><div class="dh"><h2 id="${id}-t">${title}</h2><button class="iconbtn" type="button" data-close aria-label="Close">${ic('x')}</button></div><div class="db">${body}</div><div class="df">${foot}</div></dialog>`;
+
+/* ---------- 6.13 Automation ---------- */
+export function automation() {
+  const ex = (id, build, br, commit, status, counts, when, src) => [`<a class="rowlink" href="#ed">${id}</a>`, src, build, `<span class="mono">${br}</span>`, `<span class="mono">${commit}</span>`, status, counts, when];
+  const okb = badge('Completed', 'ok', 'check'), bad = badge('Failed', 'bad', 'failed'), prog = badge('In progress', 'info', 'clock');
+  const execs = table([{ h: 'External id' }, { h: 'Source' }, { h: 'Build' }, { h: 'Branch' }, { h: 'Commit' }, { h: 'Status' }, { h: 'Counts' }, { h: 'When' }], [
+    ex('gh-4412', '2.4-rc1', 'main', 'c0ffee1', prog, '--', 'Just now', 'gh-actions: web-e2e'),
+    ex('gh-4411', '2.4-rc1', 'main', 'a1b2c3d', okb, '120 passed, 3 failed', '10:02', 'gh-actions: web-e2e'),
+    ex('gh-4410', '2.4-rc0', 'main', '9f8e7d6', okb, '118 passed, 5 failed', 'Nov 3', 'gh-actions: web-e2e'),
+    ex('gh-4409', '2.4-rc0', 'feature/login-lockout', '5d4c3b2', okb, '40 passed, 2 unmatched', 'Nov 3', 'gh-actions: api'),
+    ex('gh-4408', '2.3.1', 'release/2.3', '1c2d3e4', bad + ' <span class="meta">import error</span>', 'Malformed XML at line 88', 'Nov 3', 'gh-actions: api'),
+    ex('gh-4400', '2.3.0', 'main', 'deadbee', okb, '119 passed, 1 failed', 'Oct 14', 'gh-actions: web-e2e')]);
+  const maps = table([{ h: 'Framework' }, { h: 'Match rule' }, { h: 'Active' }, { h: '<span class="sr">Actions</span>', nolabel: true }], [['JUnit', '<span class="mono">classname.name</span>, strip <span class="mono">com.acme.</span>', badge('Active', 'ok', 'check'), '<button class="btn sm edit" type="button" data-open="dlg-map">Edit</button>'], ['Robot', '<span class="muted">Not set</span>', badge('Inactive'), '<button class="btn sm edit" type="button" data-open="dlg-map">Edit</button>']]);
+  const toks = table([{ h: 'Name' }, { h: 'Scope' }, { h: 'Mapping' }, { h: 'Expires' }, { h: 'Created by' }, { h: 'Last used' }, { h: '<span class="sr">Actions</span>', nolabel: true }], [
+    ['gh-actions <span class="mono muted">tb_demo_9f3a...c21e</span>', 'Write, CORE only', 'JUnit', 'Jan 31, 2027', 'Avery Quinn', '2h ago', '<button class="btn sm" type="button" data-open="dlg-rotate">Rotate</button> <button class="btn sm danger edit" type="button" data-open="dlg-revoke">Revoke</button>'],
+    ['nightly <span class="mono muted">tb_demo_71be...4a0d</span>', 'Read only, CORE only', 'JUnit', 'Feb 28, 2027', 'Raj Patel', '<span class="muted">Never used</span>', '<button class="btn sm" type="button" data-toast="Rotate opens a new secret dialog.">Rotate</button> <button class="btn sm danger edit" type="button" data-toast="Revoke needs the token name typed.">Revoke</button>']]);
+  const main = `${head('Automation', { meta: 'Post results from CI and keep them mapped to your cases.', actions: `<button class="btn primary edit" type="button" data-open="dlg-map">${ic('plus')}New mapping</button>` })}
+  ${phoneNote}
+  <div role="tablist" class="tabs" aria-label="Automation"><button role="tab" aria-selected="true" aria-controls="ap1" id="at1" data-allow="admin manager">Mappings${D(8)}</button><button role="tab" aria-selected="false" aria-controls="ap2" id="at2" data-allow="admin">CI tokens${D(14)}${D(25)}</button><button role="tab" aria-selected="false" aria-controls="ap3" id="at3">Executions</button></div>
+  <section data-st="ready">
+   <div role="tabpanel" id="ap1" aria-labelledby="at1"><div class="card flush">${maps}</div>
+    <div class="card" style="margin-top:16px"><h3>Test the match</h3><p class="meta" style="margin-bottom:6px">Upload a JUnit sample and see which cases it matches before you save.</p><code class="blk">com.acme.LoginTest.locks_after_five   ->   CORE-C41  (matched)
+com.acme.CheckoutTest.discount_once  ->   CORE-C58  (matched)
+com.acme.NewFeatureTest.smoke        ->   no case  (unmatched, create a draft?)</code></div></div>
+   <div role="tabpanel" id="ap2" aria-labelledby="at2" hidden><div class="row" style="justify-content:flex-end;margin-bottom:10px"><button class="btn primary edit" type="button" data-open="dlg-token">${ic('plus')}Create token</button></div><div class="card flush">${toks}</div><p class="meta" style="margin-top:8px">Only the creation dialog ever shows the secret. The list shows the start and last 4 characters, who made it and when it was last used.</p></div>
+   <div role="tabpanel" id="ap3" aria-labelledby="at3" hidden><div class="card flush">${execs}</div>
+    <section id="ed" class="card" style="margin-top:16px"><h3>gh-4409 on feature/login-lockout</h3><div class="cols c2"><div><h4 style="margin-bottom:6px">Unmatched ids (2)</h4><ul class="list-plain small"><li class="mono">com.acme.NewFeatureTest.smoke <a class="btn sm edit" data-allow="admin manager" href="case.html" style="margin-left:8px">Create case from this</a></li><li class="mono">com.acme.NewFeatureTest.edge</li></ul></div>
+     <div><h4 style="margin-bottom:6px">Error groups${D(8)}</h4><ul class="list-plain small"><li>Timeout waiting for #lock-message <span class="badge">3 tests</span></li></ul><h4 style="margin:12px 0 6px">Stability marks</h4><ul class="list-plain small"><li>${badge('Flaky', 'warn', 'alert')} CORE-C48: failed 3 of last 10, passed since.</li><li>${badge('Regressed', 'bad', 'failed')} CORE-C64: passed 9, failed last 2.</li><li>${badge('Fixed', 'ok', 'check')} CORE-C44: passed last 3 after 2 failures.</li></ul><p class="meta">Marks only annotate. They never change a manual result.</p></div></div></section></div></section>
+  <section data-st="empty" hidden>${emptyState('zap', 'No mappings', 'Connect your CI to post results automatically.', '<a class="btn primary" href="#" data-toast="Docs open in a new tab.">Read the docs</a>')}</section>`;
+  const dMap = dlg('dlg-map', 'Edit mapping', `<div class="field"><label for="mf">Framework</label><select class="in" id="mf"><option>JUnit</option><option>Robot</option><option>pytest</option><option>Custom</option></select></div><div class="field"><label for="mk">Match rule</label><input class="in mono" id="mk" value="classname.name"></div><div class="field"><label for="mp">Strip prefix</label><input class="in mono" id="mp" value="com.acme."></div><label class="sw"><input type="checkbox" checked><span>Active</span></label>`, '<button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" data-close data-toast="Mapping saved.">Save mapping</button>');
+  const dTok = dlg('dlg-token', 'Create CI token', `<div class="field"><label for="tn">Name</label><input class="in" id="tn" value="gh-actions-staging"></div><div class="grid2"><div class="field"><label for="ts">Scope</label><select class="in" id="ts"><option>Write results</option><option>Read only</option></select></div><div class="field"><label for="tm">Mapping</label><select class="in" id="tm"><option>JUnit main</option></select></div></div><div class="grid2"><div class="field"><label for="tp">Project</label><select class="in" id="tp"><option>CORE only</option></select></div><div class="field"><label for="te">Expires</label><input class="in" id="te" type="text" value="Jan 31, 2027"></div></div>`, '<button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" data-open="dlg-secret" data-close>Create token</button>');
+  const dSecret = dlg('dlg-secret', 'Copy your token now', `<p>You will not see it again.</p><div class="row" style="margin:10px 0"><input class="in mono" readonly value="tb_demo_9f3a7d1c2e5b8a40c21e" aria-label="Token"><button class="btn" type="button" data-toast="Token copied.">${ic('copy')}Copy</button></div><label class="chk"><input type="checkbox" data-gate="sec-done"> I have saved it</label>`, '<button class="btn primary" id="sec-done" type="button" data-close disabled>Done</button>');
+  const dRev = dlg('dlg-revoke', 'Revoke token', `<p>CI jobs using <b>gh-actions</b> stop working immediately. Type the token name to confirm.</p><div class="field" style="margin-top:10px"><label for="rv">Token name</label><input class="in" id="rv" data-confirm-text="gh-actions" data-target="rv-go" autocomplete="off"></div>`, '<button class="btn" type="button" data-close>Cancel</button><button class="btn danger" id="rv-go" type="button" data-close data-toast="Token gh-actions revoked." disabled>Revoke gh-actions</button>');
+  const dRot = dlg('dlg-rotate', 'Rotate token', `<p>A new secret is created for <b>gh-actions</b>. The old one keeps working for 24 hours so you can update CI.</p>`, '<button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" data-open="dlg-secret" data-close>Rotate token</button>');
+  return page({ file: 'automation', title: 'Automation', nav: 'automation', crumbs: [['Core platform', 'overview.html'], ['Automation', null]], states: ['ready', 'loading', 'empty', 'error', 'noperm'], main, extraBody: dMap + dTok + dSecret + dRev + dRot });
+}
+
+/* ---------- 6.14 Members ---------- */
+export function members() {
+  const roleSel = (cur, name, disabled = '') => `<select class="in" aria-label="Role for ${name}" ${disabled} data-allow="admin" data-mode="disable" data-reason="Only admins can change roles." data-role-select>${['Admin', 'Manager', 'Tester', 'Viewer'].map((r) => `<option${r === cur ? ' selected' : ''}>${r}</option>`).join('')}</select>`;
+  const rows = [
+    ['Avery Quinn <span class="badge">You</span>', 'avery@example.test', roleSel('Admin', 'Avery Quinn', 'disabled title="The last admin cannot be demoted."'), 'Now'],
+    ['Raj Patel', 'raj@example.com', roleSel('Manager', 'Raj Patel'), 'Today'],
+    ['Dana Lee', 'dana@example.com', roleSel('Tester', 'Dana Lee'), '2h ago'],
+    ['Sam Ortiz', 'sam@example.com', roleSel('Tester', 'Sam Ortiz'), 'Yesterday'],
+    ['Mia Chen', 'mia@example.com', roleSel('Viewer', 'Mia Chen'), 'Nov 1'],
+    ['CI Bot <span class="badge">Service</span>', 'ci@example.com', roleSel('Tester', 'CI Bot'), '10:02'],
+  ];
+  const main = `${head('Members (6)', { meta: 'People who can open Core platform.', actions: `<button class="btn primary edit" type="button" data-allow="admin" data-open="dlg-add">${ic('plus')}Add member</button>` })}
+  ${phoneNote}
+  <section data-st="ready"><div class="cols c-side"><div class="card flush">${table([{ h: 'Name' }, { h: 'Email' }, { h: 'Role' }, { h: 'Last access' }], rows)}</div>
+   <aside class="card"><h3>What can each role do?</h3><dl class="kv" style="grid-template-columns:90px 1fr"><dt>Admin</dt><dd>Everything, including members, tokens, audit log and archive.</dd><dt>Manager</dt><dd>Milestones, plans, reports export, mappings, import.</dd><dt>Tester</dt><dd>Cases, runs and recording results.</dd><dt>Viewer</dt><dd>Read everything allowed, change nothing.</dd></dl><p class="meta" style="margin-top:8px">Role changes apply at once with an Undo toast. Removing someone asks first.</p></aside></div></section>`;
+  const add = dlg('dlg-add', 'Add member', `<div class="field"><label for="am">Workspace user</label><select class="in" id="am"><option>Alex Kim</option><option>Pat Doe</option></select><span class="hint">Only workspace users who are not in this project.</span></div><div class="field"><label for="ar">Role</label><select class="in" id="ar"><option>Tester</option><option>Viewer</option><option>Manager</option><option>Admin</option></select></div>`, '<button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" data-close data-toast="Alex Kim added as Tester.">Add member</button>');
+  return page({ file: 'members', title: 'Members and roles', nav: 'members', need: 'admin manager', crumbs: [['Core platform', 'overview.html'], ['Members', null]], states: ['ready', 'loading', 'error', 'noperm'], main, extraBody: add });
+}
+
+/* ---------- 6.15 Audit ---------- */
+export function audit() {
+  const A = [
+    ['10:42 Nov 3', 'Dana Lee', 'result.create', 'Test CORE-C41', 'Failed (was Retest)', 'status', 'Retest', 'Failed'],
+    ['09:10 Nov 3', 'Raj Patel', 'run.close', 'Run Nightly API', '--', 'is_closed', 'false', 'true'],
+    ['08:55 Nov 3', 'CI Bot', 'result.create', 'Test CORE-C88', 'Passed', 'status', 'Untested', 'Passed'],
+    ['17:30 Nov 2', 'Avery Quinn', 'member.role_change', 'Member Dana Lee', 'Tester', 'role', 'Viewer', 'Tester'],
+    ['16:05 Nov 2', 'Avery Quinn', 'token.create', 'Token gh-actions', 'Write, CORE only', 'scope', '--', 'write'],
+    ['14:20 Nov 2', 'Raj Patel', 'case.update', 'Case CORE-C41', 'v2 to v3', 'steps', '4 steps', '5 steps'],
+    ['11:12 Nov 1', 'Raj Patel', 'run.create', 'Run Web smoke 2.4-rc1', '38 tests', 'tests', '0', '38'],
+    ['10:01 Nov 1', 'Avery Quinn', 'result.delete', 'Test CORE-C12', 'Deleted a mistaken result', 'result', 'Passed', '<span class="muted">removed</span>'],
+    ['09:40 Nov 1', 'System', 'project.update', 'Project Core platform', 'Announcement', 'announcement', 'Welcome', 'Release freeze Friday 18:00'],
+    ['18:00 Oct 31', 'Dana Lee', 'case.delete', 'Deleted', 'CORE-C121', 'title', 'Scratch case', '<span class="muted">removed</span>'],
+  ];
+  const rows = A.map((r) => [r[0], r[1], `<span class="mono">${r[2]}</span>`, r[3] === 'Deleted' ? `<span class="badge">Deleted</span> ${r[4]}` : r[3], r[3] === 'Deleted' ? 'Item no longer exists' : r[4]]);
+  const attrs = A.map((r, i) => `tabindex="0" data-case data-actor="${r[1]}" data-action="${r[2]}" data-when="${r[0]}" data-item="${r[3] === 'Deleted' ? 'Deleted item ' + r[4] : r[3]}" data-field="${r[5]}" data-before="${esc(r[6].replace(/<[^>]+>/g, ''))}" data-after="${esc(r[7].replace(/<[^>]+>/g, ''))}"${i === 0 ? ' aria-selected="true"' : ''}`);
+  const tbl = table([{ h: 'Time' }, { h: 'Actor' }, { h: 'Action' }, { h: 'Item' }, { h: 'Summary' }], rows, { titleCol: 3, rowAttrs: attrs, attrs: 'aria-label="Audit log" aria-rowcount="60"' });
+  const insp = `<div id="insp"><button class="btn sm back" type="button" data-insp-back>${ic('left')}Back to list</button><h3 data-fill="action" class="mono" style="font-size:15px">result.create</h3><p class="meta"><span data-fill="actor">Dana Lee</span>, <span data-fill="when">10:42 Nov 3</span>. IP 203.0.113.24</p><p style="margin:8px 0"><a href="execute.html" data-fill="item">Test CORE-C41</a></p>
+   <h4 style="margin:10px 0 6px">Changed fields</h4><dl class="kv" style="grid-template-columns:90px 1fr"><dt data-fill="field">status</dt><dd><span class="diff-del" data-fill="before">Retest</span> to <span class="diff-add" data-fill="after">Failed</span></dd></dl>
+   <p style="margin-top:10px"><label class="sw"><input type="checkbox" data-toast="Raw JSON shown (mock)."><span>Show raw JSON</span></label></p><p class="meta" style="margin-top:10px">Entries are immutable. There is nothing to edit or delete.</p></div>`;
+  const main = `${head('Audit log', { meta: 'Who did what. Admins only.', actions: `<button class="btn edit" type="button" data-toast="Exported audit.csv.">${ic('download')}Export CSV</button>` })}
+  ${phoneNote}
+  <section data-st="ready"><div class="filterbar"><select class="in" aria-label="Actor"><option>Actor</option><option>Dana Lee</option></select><select class="in" aria-label="Action"><option>Action</option></select><select class="in" aria-label="Item"><option>Item</option></select><label class="row">From <input class="in" type="text" value="Oct 28" style="width:110px"></label><label class="row">To <input class="in" type="text" value="Nov 4" style="width:110px"></label></div>
+   <div class="split two"><div class="pane-list"><div class="scrollbox">${tbl}</div><div class="tfoot"><span>1 to 10 of 60</span><span class="row"><button class="btn sm" type="button" disabled>Previous</button><button class="btn sm" type="button" aria-current="page">1</button><button class="btn sm" type="button">2</button><button class="btn sm" type="button">Next</button></span><span class="muted">Page buttons keep positions quotable.${D(3)}</span></div></div><aside class="pane-insp" aria-label="Entry detail">${insp}</aside></div>
+   <p class="meta" style="margin-top:8px">On a phone this is a read-only list of cards with no export.${D(19)} Admin only${D(15)}.</p></section>
+  <section data-st="empty" hidden>${emptyState('file', 'No audit entries for these filters', 'Widen the dates or clear a filter.', '<button class="btn" type="button">Clear filters</button>')}</section>`;
+  return page({ file: 'audit', title: 'Audit log', nav: 'audit', need: 'admin', crumbs: [['Core platform', 'overview.html'], ['Audit log', null]], states: ['ready', 'loading', 'empty', 'error', 'noperm'], main, help: [['J K', 'Move between entries'], ['Enter', 'Open the detail']] });
+}
+
+/* ---------- 6.16 Settings ---------- */
+export function settings() {
+  const gen = `<div class="card" style="max-width:720px"><div class="field"><label for="sn">Name</label><input class="in" id="sn" value="Core platform"></div>
+   <div class="field"><label for="sp">Ref prefix</label><input class="in mono" id="sp" value="CORE" readonly aria-describedby="sp-h"><span class="hint" id="sp-h">Locked after the first case.</span></div>
+   <div class="field"><label for="sa">Announcement ${D(18)}</label><textarea class="in" id="sa" rows="2">Release freeze Friday 18:00</textarea><span class="hint">Shown on the overview. Admins and managers can edit it.</span></div>
+   <div class="field" data-allow="admin" data-mode="hide"><label class="sw"><input type="checkbox" checked><span>Show Plans in the menu ${D(2)}</span></label><span class="hint">On automatically once the project has a milestone.</span></div>
+   <div class="field" data-allow="admin" data-mode="hide"><label class="sw"><input type="checkbox"><span>Allow AI features ${D(10)}</span></label><span class="hint">Off by default. Nothing AI-related runs while this is off. When on, drafts need review before saving.</span></div>
+   <div class="field"><span class="lab">Tags</span><div class="row wrap">${['smoke', 'regression', 'auth', 'checkout', 'api', 'mobile', 'flaky', 'slow', 'a11y', 'payments'].map(tag).join(' ')}</div></div>
+   <button class="btn primary" type="button" data-toast="Settings saved.">Save settings</button></div>`;
+  const imp = `<div class="card" style="max-width:720px"><p class="muted" style="margin-bottom:10px">Also offered on first run.${D(7)}</p><div class="field"><span class="lab">Format</span><label class="chk"><input type="radio" name="f" checked> TestRail XML</label><label class="chk"><input type="radio" name="f"> JSON</label><label class="chk"><input type="radio" name="f"> CSV</label></div>
+   <div class="dz"><button class="btn" type="button" data-toast="File picker opens (mock). Maximum file size 50 MB.">Choose file</button></div>
+   <h3 style="margin:14px 0 6px;font-size:15px">Preview</h3><p>3 suites, 12 sections, 120 cases. 2 rows have the same title as an existing case. ${D(10)}</p>
+   <div class="row wrap" style="margin:8px 0"><label class="chk"><input type="checkbox" checked> Map priorities</label><label class="chk"><input type="checkbox"> Skip duplicates by title</label></div>
+   <button class="btn primary" type="button" data-toast="118 imported, 2 skipped. Download the report.">Import 120 cases</button><p class="meta" style="margin-top:8px">The import is added to the audit log.</p></div>`;
+  const dz = `<div class="card" style="max-width:720px"><div class="row wrap" style="justify-content:space-between"><div><h3>Archive project</h3><p class="meta">Runs can no longer be changed. You can unarchive later.</p></div><button class="btn" type="button" data-open="dlg-arch">${ic('archive')}Archive project</button></div><hr style="border:0;border-top:1px solid var(--tb-border-subtle);margin:14px 0"><div class="row wrap" style="justify-content:space-between"><div><h3>Delete project</h3><p class="meta">Removes 120 cases, 3 runs and 218 results for good.</p></div><button class="btn danger" type="button" data-open="dlg-delp">${ic('trash')}Delete project</button></div></div>`;
+  const main = `${head('Settings')}${phoneNote}
+  <div role="tablist" class="tabs" aria-label="Settings"><button role="tab" aria-selected="true" aria-controls="sp1" id="st1">General</button><button role="tab" aria-selected="false" aria-controls="sp2" id="st2">Import</button><button role="tab" aria-selected="false" aria-controls="sp3" id="st3" data-allow="admin">Danger zone</button></div>
+  <section data-st="ready"><div role="tabpanel" id="sp1" aria-labelledby="st1">${gen}</div><div role="tabpanel" id="sp2" aria-labelledby="st2" hidden>${imp}</div><div role="tabpanel" id="sp3" aria-labelledby="st3" hidden>${dz}</div></section>`;
+  const arch = dlg('dlg-arch', 'Archive Core platform', '<p>Runs can no longer be changed and every write control is disabled. Only an admin can unarchive.</p>', '<button class="btn" type="button" data-close>Cancel</button><button class="btn primary" type="button" data-close data-toast="Project archived.">Archive project</button>');
+  const delp = dlg('dlg-delp', 'Delete Core platform', '<p>This removes 120 cases, 3 runs and 218 results. Type the project name to confirm.</p><div class="field" style="margin-top:10px"><label for="dn">Project name</label><input class="in" id="dn" data-confirm-text="Core platform" data-target="dn-go" autocomplete="off"></div>', '<button class="btn" type="button" data-close>Cancel</button><button class="btn danger" id="dn-go" type="button" data-close data-toast="Project deleted." disabled>Delete Core platform</button>');
+  return page({ file: 'settings', title: 'Settings', nav: 'settings', need: 'admin manager', crumbs: [['Core platform', 'overview.html'], ['Settings', null]], states: ['ready', 'loading', 'error', 'noperm'], main, extraBody: arch + delp });
+}

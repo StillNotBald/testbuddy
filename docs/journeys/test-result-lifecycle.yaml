@@ -1,0 +1,258 @@
+# TestBuddy journey map 2: a test inside a run and its results (status is derived from the latest result).
+# DRAFT by the AI. A cell is pre-decided ONLY where the spec states the rule; the spec file and
+# section are cited in `ref`. Every other cell is `decision: open` and points at a question (q:)
+# with a recommended answer under `suggestion`. The business owner decides every open cell.
+# "Closed run" is modelled as a guard (run_open) because the run itself lives in run-lifecycle.yaml.
+kit: journey-mapping tool/v0
+product: TestBuddy - tests and results
+decisions: ./test-result-lifecycle.decisions.yaml
+
+actors:
+  - { id: admin,   name: Project admin,   group: project role }
+  - { id: manager, name: Project manager, group: project role }
+  - { id: tester,  name: Project tester,  group: project role }
+  - { id: viewer,  name: Project viewer,  group: project role }
+  - { id: ci_token, name: CI service token (acts as the mapping's run_as user) }
+  - { id: mcp_agent, name: "MCP agent (later, M3b; acts with the caller's token)" }
+  - { id: system,  name: "System (hooks, links)" }
+
+effects:
+  audit: { failure: atomic, src: doc, ref: "docs/api/openapi.yaml /add_result ('Transactional - writes test_results + test_step_results + audit_logs')" }
+
+not_modelled:
+  - { id: NM-1, area: numeric, what: "elapsed seconds and the 'max run duration' hook rule; defects array contents; run progress percentages.", owner: unit test }
+  - { id: NM-2, area: visual, what: "Hotkeys P F B R U, optimistic save with 10 s Undo toast, status patterns and colours (DESIGN 6.11, section 4).", owner: browser test }
+  - { id: NM-3, area: other, what: "Realtime updates of a test to other viewers of the run (PocketBase subscribe).", owner: integration test }
+  - { id: NM-4, area: other, what: "MCP agent: ADR 0003 says it acts under the caller's token and role; agent auth is TBD, so the actor fires no event until decided.", owner: owner decision before M3b }
+  - { id: NM-5, area: other, what: "Test history across case versions: result.version = executed case version, older results are labelled 'v2' (DESIGN 6.11).", owner: integration test }
+
+questions:
+  - id: Q-RES-1
+    title: Clearing a status (the U hotkey)
+    priority: 1
+    record: test
+    who: admin, manager, tester
+    today: "SPEC CONFLICT. DESIGN 6.11 lists hotkey U as 'clear' (back to Untested). database-schema.md says Untested is system-owned and cannot be posted as a result."
+    options: "Allowed: clearing is a recorded action (say what it does to the result history). Blocked: remove the U hotkey and keep Untested system-only."
+    suggestion: "Blocked. Results are append-only history; to undo a mistake the tester posts a new result (Undo toast covers the 10 s case) or an admin deletes the result."
+    owner: Owner
+  - id: Q-RES-2
+    title: What counts as a stale case version when a result is posted
+    priority: 1
+    record: test
+    who: admin, manager, tester, ci_token
+    today: "openapi add_result 'Rejects if run closed or version stale'. Snapshot is refreshed while no result exists and frozen after the first result, so the test's version only changes before the first result. The rule for 'stale' is not defined."
+    options: "Reject when the submitted version differs from the test's current version, or never reject (record the version actually executed)."
+    suggestion: "Reject only when the client sends a version that differs from the test's current snapshot version, with the message 'This test changed while you were working. Reload and try again.' A client that sends no version is accepted."
+    owner: Owner
+  - id: Q-RES-3
+    title: Editing a result - may it change the status?
+    priority: 1
+    record: test
+    who: admin, manager, tester
+    today: "DESIGN section 8: 'Edit own result while run open' for admin, manager, tester. Schema: result update is allowed to TESTER+ until the run is closed. Neither says whether the status field can change, and so whether the test status is recomputed. Also schema says any tester+, DESIGN says own result only."
+    options: "Edit comment/defects/elapsed only (status unchanged), or status editable (then the test status is recomputed from the latest result)."
+    suggestion: "Comment, elapsed and defects editable by the author while the run is open; status NOT editable (post a new result instead). Admin can delete (see Q-RES-4)."
+    owner: Owner
+  - id: Q-RES-4
+    title: Admin deletes a result in a closed run
+    priority: 2
+    record: test
+    who: admin
+    today: "Schema: result delete is ADMIN, audit-logged, and the test status is recomputed. Nothing says whether the run must be open."
+    options: "Allowed in a closed run (then status of a frozen run changes), or only while the run is open."
+    suggestion: "Only while the run is open; a closed run is frozen history (irreversible close is the point of the rule)."
+    owner: Owner
+  - id: Q-RES-5
+    title: Delete an attachment in a closed run
+    priority: 3
+    record: test
+    who: admin, manager, tester
+    today: "Upload is part of 'Execute' and disabled in a closed run (DESIGN section 8). Delete in a closed run is not described."
+    options: "Allowed (uploader or admin) or blocked once the run is closed."
+    suggestion: "Blocked once closed, same as upload; evidence on a closed run is frozen."
+    owner: Owner
+  - id: Q-RES-6
+    title: Step results rules
+    priority: 2
+    record: test
+    who: admin, manager, tester, ci_token
+    today: "Schema: one step result per (result, step_position), position refers to the case_snapshot, status required. DESIGN 6.11: step statuses are optional; a failed step only PRE-SELECTS Failed in the UI. Not said: can a step status be Untested, may the overall status be Passed while a step is Failed, may a step position outside the snapshot be sent."
+    options: "Server enforces step/overall consistency, or the server stores what it is given and only validates the position."
+    suggestion: "Server validates only: position exists in the snapshot, no duplicates, step status is not Untested. Consistency with the overall status stays a UI hint."
+    owner: Owner
+  - id: Q-RES-7
+    title: Comment text when a status requires one
+    priority: 3
+    record: test
+    who: admin, manager, tester, ci_token
+    today: "DESIGN 6.11: a status flagged require_comment blocks save with an inline message; schema reserves the flag but seeds none."
+    options: "Give the message wording and say whether CI posts are also refused."
+    suggestion: "'Add a comment to save this result.' CI posts are refused the same way (item error)."
+    owner: Owner
+  - id: Q-RES-9
+    title: Edit or delete a result that does not exist, delete an attachment twice
+    priority: 3
+    record: test
+    who: admin, manager, tester
+    today: "Not described (a test with no result has nothing to edit or delete; an attachment already deleted with its result cannot be deleted again)."
+    options: "Blocked with 'Not found' or ignored."
+    suggestion: "Blocked with 'Not found'; the cascade event on an already-deleted attachment is ignored."
+    owner: Owner
+  - id: Q-RES-8
+    title: Result for a test whose case was edited, deprecated or deleted after the run started
+    priority: 2
+    record: test
+    who: admin, manager, tester
+    today: "Case-side rules are in case-lifecycle map (snapshot frozen once results exist; hard delete removes the test; deprecate-with-results removes it from open runs but keeps results). What the tester sees when the test is removed mid-session is not described."
+    options: "Say what the tester sees and whether a result can still be saved."
+    suggestion: "Save is refused with 'This test was removed from the run.' (404-style) and the draft is kept locally (DESIGN 6.11 offline/save error pattern)."
+    owner: Owner
+
+entities:
+  - id: test
+    name: Test in a run
+    tier: A
+    src: doc
+    states: [untested, passed, failed, blocked, retest]
+    initial: untested
+    resting: [untested, passed, failed, blocked, retest]
+    create: { event: add_test, actors: [admin, manager, tester], to: untested }
+    events:
+      add_test:      { actors: [admin, manager, tester], name: "Test is added to the run (add_run or add_case_to_run)" }
+      record_passed:  { actors: [admin, manager, tester, ci_token], name: Record result Passed }
+      record_failed:  { actors: [admin, manager, tester, ci_token], name: Record result Failed }
+      record_blocked: { actors: [admin, manager, tester, ci_token], name: Record result Blocked }
+      record_retest:  { actors: [admin, manager, tester, ci_token], name: Record result Retest }
+      post_untested:  { actors: [admin, manager, tester, ci_token], name: Try to record Untested (or clear status) }
+      edit_result:    { actors: [admin, manager, tester], name: Edit own latest result }
+      delete_result:  { actors: [admin], name: Delete a result (admin only) }
+    guards:
+      run_open:
+        description: The run the test belongs to is open
+        false_case: Recording a result on a closed run
+        message: "Run is closed. Results can no longer be changed."
+        src: doc
+        ref: "docs/api/openapi.yaml /add_result, /add_results ('Rejects ... closed runs'); docs/design/DESIGN.md section 9 (wording)"
+      version_current:
+        description: The submitted case version matches the test's snapshot version
+        false_case: A result sent for an older case version
+        src: doc
+        ref: "docs/api/openapi.yaml /add_result ('Rejects if ... version stale'); meaning undefined, see Q-RES-2"
+        x-q: Q-RES-2
+      comment_if_required:
+        description: A comment is present when the chosen status requires one
+        false_case: Status flagged require_comment saved without a comment
+        src: doc
+        ref: "docs/database-schema.md test_results.comment; docs/design/DESIGN.md 6.11"
+        x-q: Q-RES-7
+      steps_valid:
+        description: Each step result points at a position inside the snapshot, once, with a status
+        false_case: A step result for a position that does not exist, or twice for one position
+        src: doc
+        ref: "docs/database-schema.md test_step_results (unique (result, step_position); position refers to case_snapshot)"
+        x-q: Q-RES-6
+      author_of_result:
+        description: The actor wrote the result being edited
+        false_case: A tester editing a colleague's result
+        kind: relation
+        src: doc
+        ref: "docs/design/DESIGN.md section 8 ('Edit own result while run open'); schema says TESTER+ with no 'own', see Q-RES-3"
+        x-q: Q-RES-3
+    transitions:
+      - { id: TST-1, from: [untested, passed, failed, blocked, retest], on: record_passed,  to: passed,  guards: [run_open, version_current, comment_if_required, steps_valid], effects: [audit], expect: "Test shows Passed; the result is added to the history; earlier results stay", src: doc, ref: "docs/database-schema.md test_run_cases.status (hook-maintained from latest result); docs/api/openapi.yaml /add_result. No from-state restriction is stated, so any status may follow any other." }
+      - { id: TST-2, from: [untested, passed, failed, blocked, retest], on: record_failed,  to: failed,  guards: [run_open, version_current, comment_if_required, steps_valid], effects: [audit], expect: "Test shows Failed; the result is added to the history", src: doc, ref: "same as TST-1" }
+      - { id: TST-3, from: [untested, passed, failed, blocked, retest], on: record_blocked, to: blocked, guards: [run_open, version_current, comment_if_required, steps_valid], effects: [audit], expect: "Test shows Blocked; the result is added to the history", src: doc, ref: "same as TST-1" }
+      - { id: TST-4, from: [untested, passed, failed, blocked, retest], on: record_retest,  to: retest,  guards: [run_open, version_current, comment_if_required, steps_valid], effects: [audit], expect: "Test shows Retest; the result is added to the history", src: doc, ref: "same as TST-1" }
+      # Admin deletes a result: the hook recomputes the test status from the latest REMAINING result, or Untested if none.
+      - { id: TST-5, from: [passed, failed, blocked, retest], on: delete_result, to: untested, when: "no result remains after the delete", guards: [run_open], effects: [audit], expect: "Test shows Untested again; the deleted result is gone from the history; audit row result.delete", src: doc, ref: "docs/database-schema.md Snapshot policy last bullet; test_results Rules", q: Q-RES-4 }
+      - { id: TST-6, from: [passed, failed, blocked, retest], on: delete_result, to: passed,  when: "latest remaining result is Passed", guards: [run_open], effects: [audit], expect: "Test shows Passed", src: doc, ref: "same as TST-5", q: Q-RES-4 }
+      - { id: TST-7, from: [passed, failed, blocked, retest], on: delete_result, to: failed,  when: "latest remaining result is Failed", guards: [run_open], effects: [audit], expect: "Test shows Failed", src: doc, ref: "same as TST-5", q: Q-RES-4 }
+      - { id: TST-8, from: [passed, failed, blocked, retest], on: delete_result, to: blocked, when: "latest remaining result is Blocked", guards: [run_open], effects: [audit], expect: "Test shows Blocked", src: doc, ref: "same as TST-5", q: Q-RES-4 }
+      - { id: TST-9, from: [passed, failed, blocked, retest], on: delete_result, to: retest,  when: "latest remaining result is Retest", guards: [run_open], effects: [audit], expect: "Test shows Retest", src: doc, ref: "same as TST-5", q: Q-RES-4 }
+    cells:
+      # Untested cannot be posted (schema). Same for every state, because the hook rejects it.
+      - { state: [untested, passed, failed, blocked, retest], on: post_untested, decision: rejected, message: "Untested cannot be recorded as a result.", src: doc, ref: "docs/database-schema.md statuses ('Untested is system-owned and cannot be posted as a result (hooks reject it)'); message wording is a draft. Conflicts with DESIGN hotkey U, see Q-RES-1", q: Q-RES-1 }
+      # No result yet: nothing to edit or delete (the record does not exist).
+      - { state: untested, on: edit_result,   decision: rejected, message: "Not found", src: doc, ref: "docs/design/DESIGN.md section 5/9 (404 shows 'Not found'); a test with no result has no result record" }
+      - { state: untested, on: delete_result, decision: open, q: Q-RES-9 }
+      # Editing a result: who and whether status changes is open.
+      - { state: [passed, failed, blocked, retest], on: edit_result, decision: open, q: Q-RES-3 }
+      # Run closed: add_test cannot happen on an existing test; the create event only applies to "no test yet".
+
+  - id: attachment
+    name: Attachment on a result
+    tier: B
+    src: doc
+    states: [attached, deleted]
+    initial: attached
+    terminal: [deleted]
+    create: { event: upload, actors: [admin, manager, tester], to: attached, guards: [result_exists, run_open, file_type_allowed, file_size_ok] }
+    events:
+      upload:           { actors: [admin, manager, tester], name: Attach a file to a result }
+      delete_attachment: { actors: [admin, manager, tester], name: Delete the attachment }
+      result_deleted:   { actors: [system], trigger: link, name: The result was deleted }
+    guards:
+      result_exists:
+        description: The test has at least one result to attach to
+        false_case: Uploading a file to a test that is still Untested
+        src: doc
+        ref: "docs/database-schema.md test_attachments.result is required (add_attachment_to_result takes a result_id)"
+      run_open:
+        description: The run is open
+        false_case: Upload to a closed run
+        message: "Run is closed. Results can no longer be changed."
+        src: doc
+        ref: "docs/design/DESIGN.md section 8 ('Execute (set results, attach, comment)' is disabled for a closed run)"
+      file_type_allowed:
+        description: File type is on the allowed list
+        false_case: An .exe file
+        message: "report.exe is not an allowed type"
+        src: doc
+        ref: "docs/database-schema.md test_attachments (type list); docs/design/DESIGN.md 6.11 (example text, filename varies)"
+      file_size_ok:
+        description: File is 25 MB or smaller
+        false_case: A 26 MB file
+        src: doc
+        ref: "docs/database-schema.md test_attachments (<= 25 MB); DESIGN 6.11 says limit errors show inline, wording not given"
+      uploader_or_admin:
+        description: The actor uploaded the file, or is admin
+        false_case: A tester deleting someone else's attachment
+        kind: relation
+        src: doc
+        ref: "docs/database-schema.md test_attachments Rules ('delete = uploader or ADMIN'); docs/design/DESIGN.md section 8"
+    transitions:
+      - { id: ATT-1, from: attached, on: delete_attachment, to: deleted, guards: [uploader_or_admin, run_open], effects: [audit], expect: "The attachment is gone from the result", src: doc, ref: "docs/database-schema.md test_attachments Rules", q: Q-RES-5 }
+      - { id: ATT-2, from: attached, on: result_deleted, to: deleted, expect: "The attachment is deleted with its result", src: doc, ref: "docs/database-schema.md test_attachments.result (cascade delete)" }
+    cells:
+      - { state: deleted, on: delete_attachment, decision: open, q: Q-RES-9 }
+      - { state: deleted, on: result_deleted,    decision: ignored, src: doc, ref: "already deleted with its result; nothing left to cascade" }
+
+links:
+  - { id: LNK-1, when: { entity: test, transition: TST-5 }, then: { entity: attachment, event: result_deleted }, src: doc }
+  - { id: LNK-2, when: { entity: test, transition: TST-6 }, then: { entity: attachment, event: result_deleted }, src: doc }
+  - { id: LNK-3, when: { entity: test, transition: TST-7 }, then: { entity: attachment, event: result_deleted }, src: doc }
+  - { id: LNK-4, when: { entity: test, transition: TST-8 }, then: { entity: attachment, event: result_deleted }, src: doc }
+  - { id: LNK-5, when: { entity: test, transition: TST-9 }, then: { entity: attachment, event: result_deleted }, src: doc }
+
+journeys:
+  - id: J-1
+    name: Tester fails a test, retests it and passes it
+    role: tester
+    tier: A
+    start: { test: untested }
+    steps:
+      - { do: "test.TST-2@untested", screen: "/p/{projectId}/runs/{runId}/tests/{testId}" }
+      - { do: "test.TST-4@failed", screen: "/p/{projectId}/runs/{runId}/tests/{testId}" }
+      - { do: "test.TST-1@retest", screen: "/p/{projectId}/runs/{runId}/tests/{testId}" }
+    end: { test: passed }
+  - id: J-2
+    name: Admin deletes the only result and the test goes back to Untested
+    role: admin
+    tier: A
+    start: { test: failed }
+    steps:
+      - { do: "test.TST-5@failed", screen: "/p/{projectId}/runs/{runId}/tests/{testId}" }
+    end: { test: untested }
+
+walk_unwalked: true

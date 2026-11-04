@@ -1,0 +1,122 @@
+# decisions.yaml: the owner's answers, appended by `journey-mapping tool decide`. Append-only; the map itself is never edited.
+- id: D-001
+  q: Q-RES-1
+  cells:
+    - test.CELL.untested.post_untested
+    - test.CELL.passed.post_untested
+    - test.CELL.failed.post_untested
+    - test.CELL.blocked.post_untested
+    - test.CELL.retest.post_untested
+  decision: blocked
+  message: Untested cannot be recorded as a result.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: The U key clears the unsaved selection only and records nothing.
+  supersedes: null
+- id: D-002
+  q: Q-RES-2
+  cells: []
+  decision: blocked
+  message: This test changed while you were working. Reload and try again.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Reject only when the client sends a version that differs from the test snapshot version; no version sent is accepted.
+  supersedes: null
+- id: D-003
+  q: Q-RES-3
+  cells:
+    - test.CELL.passed.edit_result
+  decision: allowed
+  goes_to: passed
+  message: The result is saved; the test status is unchanged.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Editing changes only comment, elapsed and defects of the result; status and status history never change.
+  supersedes: null
+- id: D-004
+  q: Q-RES-3
+  cells:
+    - test.CELL.failed.edit_result
+  decision: allowed
+  goes_to: failed
+  message: The result is saved; the test status is unchanged.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Editing changes only comment, elapsed and defects of the result; status and status history never change.
+  supersedes: null
+- id: D-005
+  q: Q-RES-3
+  cells:
+    - test.CELL.blocked.edit_result
+  decision: allowed
+  goes_to: blocked
+  message: The result is saved; the test status is unchanged.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Editing changes only comment, elapsed and defects of the result; status and status history never change.
+  supersedes: null
+- id: D-006
+  q: Q-RES-3
+  cells:
+    - test.CELL.retest.edit_result
+  decision: allowed
+  goes_to: retest
+  message: The result is saved; the test status is unchanged.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Editing changes only comment, elapsed and defects of the result; status and status history never change.
+  supersedes: null
+- id: D-007
+  q: Q-RES-4
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Admin may delete a result only while the run is open (guard run_open added to TST-5..9).
+  supersedes: null
+- id: D-008
+  q: Q-RES-5
+  cells: []
+  decision: blocked
+  message: Run is closed. Results can no longer be changed.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Attachment delete blocked once the run is closed (guard run_open added to ATT-1).
+  supersedes: null
+- id: D-009
+  q: Q-RES-6
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Server validates step position exists in snapshot, no duplicates, step status not Untested; consistency with overall status is a UI hint.
+  supersedes: null
+- id: D-010
+  q: Q-RES-7
+  cells: []
+  decision: blocked
+  message: A comment is required for this status.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: CI posts are refused the same way (item error).
+  supersedes: null
+- id: D-011
+  q: Q-RES-8
+  cells: []
+  decision: blocked
+  message: This test was removed from the run.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Save refused; draft kept locally.
+  supersedes: null
+- id: D-012
+  q: Q-RES-9
+  cells:
+    - test.CELL.untested.delete_result
+    - attachment.CELL.deleted.delete_attachment
+  decision: blocked
+  message: Not found
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Edit or delete a missing result, or delete an attachment twice.
+  supersedes: null

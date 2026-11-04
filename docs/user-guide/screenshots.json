@@ -1,0 +1,21 @@
+{
+  "_comment": "Route to screenshot list. `node scripts/user-guide-pdf.mjs --shots` visits each route on BASE_URL and writes docs/user-guide/img/<file>. Chapters lists the markdown files in print order. Images in the markdown can also point into testing-log, for example ../../testing-log/2026-11-04_render-check-*/screenshots/overview.png ('*' resolves to the newest match).",
+  "baseUrl": "http://127.0.0.1:3000",
+  "viewport": { "width": 1280, "height": 800 },
+  "signInAs": "Avery Quinn",
+  "projectId": "prj_core",
+  "chapters": ["index.md", "getting-started.md", "tester.md", "lead.md", "manager.md", "admin.md", "ci.md"],
+  "shots": [
+    { "file": "sign-in.png", "route": "/sign-in", "signedOut": true },
+    { "file": "overview.png", "route": "/p/{projectId}" },
+    { "file": "case-editor.png", "route": "/p/{projectId}/cases/new" },
+    { "file": "new-run.png", "route": "/p/{projectId}/runs/new" },
+    { "file": "run-detail.png", "route": "/p/{projectId}/runs/run_web" },
+    { "file": "test-execution.png", "route": "/p/{projectId}/runs/run_web/tests/t_run_web_1" },
+    { "file": "milestones.png", "route": "/p/{projectId}/milestones" },
+    { "file": "reports.png", "route": "/p/{projectId}/reports" },
+    { "file": "members.png", "route": "/p/{projectId}/members" },
+    { "file": "settings.png", "route": "/p/{projectId}/settings" },
+    { "file": "automation.png", "route": "/p/{projectId}/automation" }
+  ]
+}

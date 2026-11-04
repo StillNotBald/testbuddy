@@ -1,0 +1,22 @@
+node_modules
+.next
+out
+pb_data/
+pb_public/
+/bin/
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+.env*
+!.env.example
+
+docs/user-guide/dist/
+
+# Local-only files
+.pb/
+.vercel
+*.local.*
+scripts/_*.mjs

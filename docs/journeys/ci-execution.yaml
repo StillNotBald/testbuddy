@@ -1,0 +1,304 @@
+# TestBuddy journey map 4: CI result posting and file import (automation_executions, CI tokens, per-item outcomes).
+# DRAFT by the AI. A cell is pre-decided ONLY where the spec states the rule; the spec file and
+# section are cited in `ref`. Every other cell is `decision: open` and points at a question (q:)
+# with a recommended answer under `suggestion`. The business owner decides every open cell.
+kit: journey-mapping tool/v0
+product: TestBuddy - CI execution and import
+decisions: ./ci-execution.decisions.yaml
+
+actors:
+  - { id: admin,   name: Project admin,   group: project role }
+  - { id: manager, name: Project manager, group: project role }
+  - { id: tester,  name: Project tester,  group: project role }
+  - { id: viewer,  name: Project viewer,  group: project role }
+  - { id: ci_token, name: CI service token (acts as the mapping's run_as user) }
+  - { id: mcp_agent, name: "MCP agent (later, M3b; acts with the caller's token)" }
+  - { id: system,  name: "System (hooks, links)" }
+
+effects:
+  audit: { failure: atomic, src: doc, ref: "docs/implementation-plan.md M4 + openapi post_results_automation (results written as run_as, audit-logged); atomicity for audit is stated for add_result, applied by analogy - see Q-CI-14", x-q: Q-CI-14 }
+
+not_modelled:
+  - { id: NM-1, area: numeric, what: "Batch limits: more than 1,000 results is 400, body over 25 MB is 413, rate limit is 429 with Retry-After (schema 'Batch limits', 'Rate limiting'). Tested as API contract.", owner: API contract test }
+  - { id: NM-2, area: contract, what: "Framework parsing: JUnit classname/name and Robot output.xml to case_ref via field_map rules; sample fixtures are the acceptance test (plan M4).", owner: importer fixtures }
+  - { id: NM-3, area: contract, what: "Token is generated on mapping create, shown once, only token_hash + prefix stored, hash never in any API response.", owner: API contract test }
+  - { id: NM-4, area: other, what: "MCP agent has no CI role. Actor declared for later; agents use the caller's token (ADR 0003).", owner: owner decision before M3b }
+  - { id: NM-5, area: other, what: "Result-level effects on the test status are in test-result-lifecycle.yaml; closed-run behaviour in run-lifecycle.yaml.", owner: other maps }
+
+questions:
+  - id: Q-CI-1
+    title: Same external_execution_id posted again with a different payload
+    priority: 1
+    record: execution
+    who: ci_token
+    today: "Spec: re-POSTing the same batch must not create duplicate results and returns an 'already-processed' summary. Not said: what if the results differ (a CI retry after a partial fix)."
+    options: "Ignore the new payload and return the first summary, or refuse with a message (conflict)."
+    suggestion: "Refuse with 409-style 'This execution id was already used with different results.' Prevents silent loss; identical re-POST still returns the stored summary."
+    owner: Owner
+  - id: Q-CI-2
+    title: Re-POST of an execution that failed
+    priority: 1
+    record: execution
+    who: ci_token
+    today: "Status can be failed (DESIGN example: 'Failed (import error)'). Whether the same id may be retried is not described."
+    options: "Retry reprocesses the batch under the same execution record, or the id is burned and a new id is required."
+    suggestion: "Retry reprocesses under the same record (a failed import wrote nothing, because processing is transactional); status goes back to in_progress."
+    owner: Owner
+  - id: Q-CI-3
+    title: Re-POST while the first request is still in_progress
+    priority: 2
+    record: execution
+    who: ci_token
+    today: "Not described. CI clients retry on timeouts, so this happens."
+    options: "Refuse with a 'still processing' message, or wait and return the final summary."
+    suggestion: "Refuse with 'This execution is still being processed. Try again shortly.' (no duplicate work)."
+    owner: Owner
+  - id: Q-CI-4
+    title: An execution is stuck in in_progress
+    priority: 2
+    record: execution
+    who: system
+    today: "Status in_progress exists. Nothing says what ends it if the server stops mid-request."
+    options: "Timeout after N minutes (give N) and mark failed, or admin cleans up manually."
+    suggestion: "Automatic timeout after 15 minutes marks the execution failed so the CI client can retry (Q-CI-2)."
+    owner: Owner
+  - id: Q-CI-5
+    title: Case ref in the payload matches no case (unmatched)
+    priority: 1
+    record: batch item
+    who: ci_token
+    today: "Plan M4: unmatched cases are 'handled per mapping config' and 'unmatched case reported'. DESIGN 6.13: execution detail lists unmatched external ids with 'Create case from this' (manager+). But automation_mappings has no field for the policy (SPEC GAP), and openapi 400 text says item-level errors fail the batch for add_results only."
+    options: "Skip the item, record it as unmatched in the execution summary, keep the rest (accepted); or reject the whole batch with errors[]. Say whether the choice is a per-mapping setting."
+    suggestion: "Skip and report (item status 'unmatched' in the execution detail) so one renamed test does not block a 2,000-test CI run; add a mapping setting 'on_unmatched = skip|reject' defaulting to skip."
+    owner: Owner
+  - id: Q-CI-6
+    title: Case ref matches a deprecated case
+    priority: 1
+    record: batch item
+    who: ci_token
+    today: "Plan M4: 'deprecated-case guard (reject or skip-with-warning per mapping config)'. The mapping has no such field (SPEC GAP). Also: a deprecated case that is already a test in an open run (Q-CASE-4 in case-lifecycle)."
+    options: "Skip with a warning, or reject the item (or batch)."
+    suggestion: "Skip with a warning in the execution summary (never record a result against a deprecated case); same mapping setting style as Q-CI-5."
+    owner: Owner
+  - id: Q-CI-7
+    title: Item has an invalid status or is malformed
+    priority: 2
+    record: batch item
+    who: ci_token
+    today: "AutomationResult.status allows passed, blocked, retest, failed only; 'untested' is not postable. add_results fails the whole batch on item errors; post_results_automation does not say."
+    options: "Reject the whole batch (400 with errors[]) or reject that item only."
+    suggestion: "Reject the whole batch with errors[] for malformed input (a client bug), but skip-and-report for unmatched/deprecated (a data state). Two different failure classes."
+    owner: Owner
+  - id: Q-CI-8
+    title: No run_id is sent, or the run is closed
+    priority: 1
+    record: batch item
+    who: ci_token
+    today: "execution.run_id is nullable. A result needs a test inside a run, so a missing run_id has no home (SPEC GAP). Closed-run writes are refused for add_result; for CI nothing is said."
+    options: "No run_id: auto-create a run named after build/branch (say which suite), or refuse. Closed run: refuse or skip."
+    suggestion: "No run_id: refuse with 'run_id is required' for v1 (explicit binding, plan M4 'CI run binding'); closed run: refuse the batch with the same closed-run message as the UI."
+    owner: Owner
+  - id: Q-CI-9
+    title: Token belongs to a mapping of another project
+    priority: 1
+    record: CI token
+    who: ci_token
+    today: "Token is validated against an automation_mappings record; the path carries project_id. Whether a mismatch is refused is not written."
+    options: "Refuse (which code and message) or ignore the path and use the mapping's project."
+    suggestion: "Refuse with 403 'This token does not belong to this project.' Never use the mapping's project silently (tenant isolation)."
+    owner: Owner
+  - id: Q-CI-10
+    title: What deactivating a mapping or revoking a token does
+    priority: 2
+    record: CI token
+    who: admin, manager
+    today: "SPEC CONFLICT. Schema: one token per mapping (token_hash on automation_mappings) and mappings are editable by admin AND manager, with is_active. DESIGN 6.13: tokens are listed separately (name, mapping, created, last used), 'Create token', revoke needs a typed name, token create/revoke is ADMIN only. DESIGN section 8 itself flags the role mismatch."
+    options: "Pick the model: one token per mapping, or many tokens per mapping (needs a tokens collection). Say whether a manager who creates a mapping gets a token."
+    suggestion: "Many tokens per mapping (separate collection: name, hash, prefix, last_used, revoked_on). Mapping edit stays admin and manager; creating or revoking a token is admin only. A manager-created mapping starts with no token."
+    owner: Owner
+  - id: Q-CI-11
+    title: The run_as user is inactive or has no tester role
+    priority: 1
+    record: CI token
+    who: ci_token
+    today: "Results are written as the mapping's run_as user. users.is_active=false is blocked by auth hooks; the project role of run_as (could be viewer) is not checked in the spec."
+    options: "Refuse in both cases (which message), or only inactive."
+    suggestion: "Refuse when run_as is inactive or not tester/manager/admin in this project: 403 'The CI user cannot write results.' Check at post time, not just at token creation."
+    owner: Owner
+  - id: Q-CI-12
+    title: Which project roles may use the bearer path of import_results_file
+    priority: 2
+    record: execution
+    who: admin, manager, tester, viewer
+    today: "import_results_file accepts a CI token or a user bearer token. No role is named. post_results_automation is token only."
+    options: "Name the roles that can upload a results file by hand."
+    suggestion: "Admin, manager and tester (anyone who can execute); viewer refused. Same rule as recording a result."
+    owner: Owner
+  - id: Q-CI-13
+    title: Where idempotency is keyed - batch or item
+    priority: 2
+    record: execution
+    who: ci_token
+    today: "SPEC CONFLICT. schema: unique (mapping, external_execution_id) on automation_executions. openapi AutomationBatch has external_execution_id at execution level AND AutomationResult has its own external_execution_id."
+    options: "Batch-level key only, or also an item-level key."
+    suggestion: "Batch-level key only; remove it from AutomationResult (two keys invite contradictory input)."
+    owner: Owner
+  - id: Q-CI-14
+    title: If the audit write fails while posting CI results
+    priority: 2
+    record: execution
+    who: system
+    today: "Audit is atomic for add_result. For CI batches nothing is stated."
+    options: "Atomic (nothing is recorded) or best effort."
+    suggestion: "Atomic, same as add_result."
+    owner: Owner
+  - id: Q-CI-15
+    title: Error code for a bad or missing token
+    priority: 3
+    record: CI token
+    who: ci_token
+    today: "SPEC CONFLICT. openapi Error schema says '403 = invalid token/permission', but post_results_automation and import_results_file list 401 Unauthorized for missing/invalid authentication."
+    options: "401 for missing or invalid credentials and 403 for valid credentials without permission, or 403 for both."
+    suggestion: "401 for missing, malformed, revoked or unknown token; 403 for a valid token that is not allowed (wrong project, run_as lacks role). Fix the Error description."
+    owner: Owner
+  - id: Q-CI-17
+    title: An item is processed twice inside one request
+    priority: 3
+    record: batch item
+    who: system
+    today: "Not described. Each item is meant to be handled exactly once per request."
+    options: "Confirm these combinations cannot occur (ignored), or say what should happen."
+    suggestion: "Ignored: an item that already has an outcome keeps it. Confirm once for all cells."
+    owner: Owner
+  - id: Q-CI-16
+    title: Batch of results for tests that already have results (second execution for same run)
+    priority: 3
+    record: batch item
+    who: ci_token
+    today: "A new execution id for the same run and the same cases appends new results (history grows). Spec does not forbid it."
+    options: "Allowed (append), or refuse a case that already has a CI result in this run."
+    suggestion: "Allowed: results are append-only history; the latest result wins."
+    owner: Owner
+
+entities:
+  - id: token
+    name: CI token
+    tier: A
+    src: doc
+    states: [active, revoked]
+    initial: active
+    terminal: [revoked]
+    create: { event: create_token, actors: [admin], to: active }
+    events:
+      create_token: { actors: [admin], name: Create a token (shown once) }
+      revoke_token: { actors: [admin], name: Revoke the token }
+      present_token: { actors: [ci_token], name: Token is sent in X-API-Token }
+    guards:
+      token_matches_project:
+        description: The token's mapping belongs to the project in the URL
+        false_case: A token of project A used on a route of project B
+        x-q: Q-CI-9
+        src: doc
+        ref: "docs/api/openapi.yaml securitySchemes.ciToken ('Validated against an automation_mappings record'); mismatch rule not written"
+      run_as_can_write:
+        description: The run_as user is active and holds tester, manager or admin
+        false_case: run_as user disabled or only a viewer
+        x-q: Q-CI-11
+        src: doc
+        ref: "docs/database-schema.md users.is_active; automation_mappings.run_as; role check not written"
+    transitions:
+      - { id: TOK-1, from: active, on: revoke_token, to: revoked, effects: [audit], expect: "The token stops working at once; the list shows it as revoked", src: doc, ref: "docs/design/DESIGN.md 6.13 ('Revoke needs typed token name'); section 8 (admin only)", q: Q-CI-10 }
+      - { id: TOK-2, from: active, on: present_token, to: active, guards: [token_matches_project, run_as_can_write], expect: "The request is accepted and runs as the mapping's run_as user; last used is updated", src: doc, ref: "docs/api/openapi.yaml ciToken; docs/design/DESIGN.md 6.13 (last used)" }
+    cells:
+      - { state: revoked, on: present_token, decision: rejected, message: "Missing/invalid authentication", src: doc, ref: "docs/api/openapi.yaml post_results_automation 401 Unauthorized ('Missing/invalid authentication'); revoked token is invalid by definition. Code 401 vs 403 see Q-CI-15", q: Q-CI-15 }
+      - { state: revoked, on: revoke_token,  decision: open, q: Q-CI-10 }
+      - { state: active,  on: create_token,  decision: open, q: Q-CI-10 }
+      - { state: revoked, on: create_token,  decision: open, q: Q-CI-10 }
+
+  - id: execution
+    name: Automation execution
+    tier: A
+    src: doc
+    states: [in_progress, completed, failed]
+    initial: in_progress
+    terminal: [completed]
+    resting: [failed]
+    create: { event: receive_batch, actors: [ci_token], to: in_progress, guards: [execution_id_present, batch_size_ok] }
+    events:
+      receive_batch: { actors: [ci_token], name: First POST of a batch or results file }
+      repost:        { actors: [ci_token], name: Same external_execution_id posted again with the same payload }
+      repost_changed: { actors: [ci_token], name: Same external_execution_id posted again with a different payload }
+      finish_ok:     { actors: [system], name: All items processed }
+      finish_failed: { actors: [system], name: "Import error, nothing recorded" }
+      timeout:       { actors: [system], name: Processing took too long }
+    guards:
+      execution_id_present:
+        description: external_execution_id is present
+        false_case: A batch with no execution id
+        src: doc
+        ref: "docs/api/openapi.yaml AutomationBatch (required); message not written"
+      batch_size_ok:
+        description: At most 1,000 results
+        false_case: A batch of 1,001 results
+        src: doc
+        ref: "docs/database-schema.md Batch limits (400)"
+    transitions:
+      - { id: EXE-1, from: in_progress, on: finish_ok, to: completed, effects: [audit], expect: "Summary shows counts of passed/failed/blocked/retest, skipped and unmatched; build, branch and commit are shown", src: doc, ref: "docs/design/DESIGN.md 6.13 executions table; plan M4 acceptance" }
+      - { id: EXE-2, from: in_progress, on: finish_failed, to: failed, expect: "Execution shows Failed with the import error; no results were written", src: doc, ref: "docs/design/DESIGN.md 6.13 ('Failed (import error)'); atomicity per Q-CI-14", q: Q-CI-14 }
+    cells:
+      - { state: completed, on: repost, decision: ignored, src: doc, ref: "docs/api/openapi.yaml post_results_automation ('re-POSTing the same batch must not create duplicate test_results'; 200 'already-processed execution summary')" }
+      - { state: failed,      on: repost, decision: open, q: Q-CI-2 }
+      - { state: in_progress, on: repost, decision: open, q: Q-CI-3 }
+      - { state: completed,   on: repost_changed, decision: open, q: Q-CI-1 }
+      - { state: in_progress, on: repost_changed, decision: open, q: Q-CI-1 }
+      - { state: failed,      on: repost_changed, decision: open, q: Q-CI-1 }
+      - { state: [in_progress, completed, failed], on: timeout, decision: open, q: Q-CI-4 }
+      - { state: [completed, failed], on: finish_ok, decision: open, q: Q-CI-4 }
+      - { state: [completed, failed], on: finish_failed, decision: open, q: Q-CI-4 }
+
+  - id: item
+    name: One result in a batch
+    tier: A
+    src: doc
+    states: [pending, recorded, unmatched, skipped, rejected]
+    initial: pending
+    terminal: [recorded, unmatched, skipped, rejected]
+    events:
+      process_ok:           { actors: [system], name: Ref matches an active case in an open run with a valid status }
+      process_unmatched:    { actors: [system], name: Ref matches no case }
+      process_deprecated:   { actors: [system], name: Ref matches a deprecated case }
+      process_bad_status:   { actors: [system], name: Status is not postable (for example untested) or the item is malformed }
+      process_run_closed:   { actors: [system], name: The bound run is closed }
+    transitions:
+      - { id: ITM-1, from: pending, on: process_ok, to: recorded, effects: [audit], expect: "A result is appended to the matching test, written as the run_as user; the test status follows the latest result", src: doc, ref: "docs/api/openapi.yaml post_results_automation; docs/database-schema.md automation_mappings.run_as" }
+    cells:
+      - { state: pending, on: process_unmatched,  decision: open, q: Q-CI-5 }
+      - { state: pending, on: process_deprecated, decision: open, q: Q-CI-6 }
+      - { state: pending, on: process_bad_status, decision: open, q: Q-CI-7 }
+      - { state: pending, on: process_run_closed, decision: open, q: Q-CI-8 }
+      - { state: [recorded, unmatched, skipped, rejected], on: process_ok, decision: open, q: Q-CI-17 }
+      - { state: [recorded, unmatched, skipped, rejected], on: process_unmatched, decision: open, q: Q-CI-17 }
+      - { state: [recorded, unmatched, skipped, rejected], on: process_deprecated, decision: open, q: Q-CI-17 }
+      - { state: [recorded, unmatched, skipped, rejected], on: process_bad_status, decision: open, q: Q-CI-17 }
+      - { state: [recorded, unmatched, skipped, rejected], on: process_run_closed, decision: open, q: Q-CI-17 }
+
+journeys:
+  - id: J-1
+    name: CI run posts a batch and the execution completes
+    role: ci_token
+    tier: A
+    start: { execution: in_progress, item: pending }
+    steps:
+      - { do: item.ITM-1, as: system }
+      - { do: execution.EXE-1, as: system }
+    end: { execution: completed, item: recorded }
+  - id: J-2
+    name: Admin revokes a token
+    role: admin
+    tier: A
+    start: { token: active }
+    steps:
+      - { do: token.TOK-1, screen: "/p/{projectId}/automation" }
+    end: { token: revoked }
+
+walk_unwalked: true

@@ -1,0 +1,233 @@
+/*
+ * TestBuddy design tokens (Tailwind v4, CSS-first).
+ * Copy to src/app/tokens.css and import after `@import "tailwindcss";` in globals.css.
+ * Original TestBuddy values; the "rebrand in 6 vars" idea is the only idea borrowed from the house design system.
+ *
+ * ROOT REBRAND VARS (change these six and the app re-skins):
+ *   --tb-accent  --tb-accent-hover  --tb-accent-ink  --tb-primary  --tb-primary-fg  --tb-bg-canvas
+ * Dark mode: add class "dark" on <html> (next-themes, attribute="class").
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* ---- 6 root rebrand vars ---- */
+  --tb-accent: #2d6bf5;
+  --tb-accent-hover: #1a5ce8;
+  --tb-accent-ink: #ffffff;      /* text drawn ON accent */
+  --tb-primary: #2d6bf5;         /* button bg; alias of accent by default */
+  --tb-primary-fg: #ffffff;
+  --tb-bg-canvas: #ffffff;
+
+  /* ---- Surfaces ---- */
+  --tb-bg-surface: #ffffff;      /* cards, panels, popovers */
+  --tb-bg-grouped: #f5f6f9;      /* app background behind cards */
+  --tb-bg-sunken: #eceef2;       /* table header, code, input groups */
+  --tb-selected-row: #eaf1ff;
+  --tb-overlay: rgba(23, 26, 34, 0.3);
+
+  /* ---- Borders ---- */
+  --tb-border-subtle: #e2e4ea;
+  --tb-border-strong: #8e93a1;   /* inputs, >= 3:1 */
+
+  /* ---- Text ---- */
+  --tb-ink: #171a22;
+  --tb-ink-secondary: #3f4454;
+  --tb-ink-muted: #5b6070;       /* 5.9:1 on white */
+  --tb-accent-text: #1a5ce8;     /* links, active nav (>= 5:1 on white) */
+
+  /* ---- Semantic (never used for test status) ---- */
+  --tb-info: #0a6fd6;
+  --tb-success: #0b8a6a;
+  --tb-warning: #c27803;
+  --tb-danger: #d03a2f;
+  --tb-danger-fg: #ffffff;
+
+  /* ---- Test status: solid / tint bg / text on tint ---- */
+  --tb-status-passed: #0b8a6a;   --tb-status-passed-bg: #e3f6f0;   --tb-status-passed-text: #066048;
+  --tb-status-failed: #d03a2f;   --tb-status-failed-bg: #fdeceb;   --tb-status-failed-text: #a3231a;
+  --tb-status-blocked: #c27803;  --tb-status-blocked-bg: #fff3dc;  --tb-status-blocked-text: #7d4c00;
+  --tb-status-retest: #0072b2;   --tb-status-retest-bg: #e2f1fa;   --tb-status-retest-text: #004f7c;
+  --tb-status-untested: #8e93a1; --tb-status-untested-bg: #eef0f3; --tb-status-untested-text: #4b5060;
+
+  /* ---- Priority (always glyph + text) ---- */
+  --tb-priority-p1: #d03a2f;
+  --tb-priority-p2: #c27803;
+  --tb-priority-p3: #2d6bf5;
+  --tb-priority-p4: #6b7080;
+
+  /* ---- Automation status ---- */
+  --tb-auto-not-specified: #6b7080;
+  --tb-auto-needs-review: #c27803;
+  --tb-auto-needs-automation: #0072b2;
+  --tb-auto-in-progress: #2d6bf5;
+  --tb-auto-automated: #0b8a6a;
+  --tb-auto-not-automatable: #6b7080;
+
+  /* ---- Sidebar ---- */
+  --tb-sidebar-bg: var(--tb-bg-canvas);
+  --tb-sidebar-border: var(--tb-border-subtle);
+  --tb-sidebar-active-bg: var(--tb-bg-sunken);
+  --tb-sidebar-w: 232px;
+  --tb-sidebar-w-collapsed: 60px;
+  --tb-topbar-h: 52px;
+
+  /* ---- Radius / elevation / density / motion ---- */
+  --tb-radius-xs: 3px;
+  --tb-radius-sm: 5px;
+  --tb-radius-md: 8px;
+  --tb-radius-lg: 11px;
+  --tb-radius-xl: 14px;
+  --tb-shadow-sm: 0 1px 3px -0.5px rgba(23, 26, 34, 0.08), 0 2px 6px -1px rgba(23, 26, 34, 0.06);
+  --tb-shadow-md: 0 4px 16px rgba(23, 26, 34, 0.09);
+  --tb-shadow-lg: 0 12px 32px rgba(23, 26, 34, 0.14);
+  --tb-row-h: 44px;
+  --tb-row-h-compact: 32px;
+  --tb-detail-min: 360px;
+  --tb-dur-fast: 120ms;
+  --tb-dur-base: 200ms;
+  --tb-focus-ring: 0 0 0 2px var(--tb-bg-canvas), 0 0 0 4px var(--tb-accent);
+
+  --tb-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --tb-font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+
+  color-scheme: light;
+}
+
+.dark {
+  --tb-accent: #4d86ff;
+  --tb-accent-hover: #6b9bff;
+  --tb-accent-ink: #06142e;
+  --tb-primary: #4d86ff;
+  --tb-primary-fg: #06142e;
+  --tb-bg-canvas: #0e0f13;
+
+  --tb-bg-surface: #16181d;
+  --tb-bg-grouped: #0e0f13;
+  --tb-bg-sunken: #1e2027;
+  --tb-selected-row: rgba(77, 134, 255, 0.14);
+  --tb-overlay: rgba(0, 0, 0, 0.55);
+
+  --tb-border-subtle: #272a32;
+  --tb-border-strong: #4a4e5c;
+
+  --tb-ink: #e8e9ee;
+  --tb-ink-secondary: #b5b9c4;
+  --tb-ink-muted: #8d92a0;
+  --tb-accent-text: #7ba6fb;
+
+  --tb-info: #4db3f0;
+  --tb-success: #2ec4a0;
+  --tb-warning: #f0a82e;
+  --tb-danger: #ff6b5e;
+  --tb-danger-fg: #1a0604;
+
+  --tb-status-passed: #2ec4a0;   --tb-status-passed-bg: rgba(46, 196, 160, 0.16);  --tb-status-passed-text: #6fe0c3;
+  --tb-status-failed: #ff6b5e;   --tb-status-failed-bg: rgba(255, 107, 94, 0.16);  --tb-status-failed-text: #ff9a90;
+  --tb-status-blocked: #f0a82e;  --tb-status-blocked-bg: rgba(240, 168, 46, 0.16); --tb-status-blocked-text: #f6c668;
+  --tb-status-retest: #4db3f0;   --tb-status-retest-bg: rgba(77, 179, 240, 0.16);  --tb-status-retest-text: #8fd0f8;
+  --tb-status-untested: #7a7f8e; --tb-status-untested-bg: rgba(142, 147, 161, 0.16); --tb-status-untested-text: #b5b9c4;
+
+  --tb-priority-p1: #ff6b5e;
+  --tb-priority-p2: #f0a82e;
+  --tb-priority-p3: #6b9bff;
+  --tb-priority-p4: #9ba0ae;
+
+  --tb-auto-not-specified: #9ba0ae;
+  --tb-auto-needs-review: #f0a82e;
+  --tb-auto-needs-automation: #4db3f0;
+  --tb-auto-in-progress: #6b9bff;
+  --tb-auto-automated: #2ec4a0;
+  --tb-auto-not-automatable: #9ba0ae;
+
+  --tb-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --tb-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --tb-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+
+  color-scheme: dark;
+}
+
+/* Tailwind v4 theme: `inline` so utilities read the runtime vars (dark mode just works).
+   Usage: bg-canvas text-ink border-subtle text-status-failed bg-status-failed-bg rounded-md shadow-sm */
+@theme inline {
+  --color-canvas: var(--tb-bg-canvas);
+  --color-surface: var(--tb-bg-surface);
+  --color-grouped: var(--tb-bg-grouped);
+  --color-sunken: var(--tb-bg-sunken);
+  --color-selected: var(--tb-selected-row);
+  --color-subtle: var(--tb-border-subtle);
+  --color-strong: var(--tb-border-strong);
+  --color-ink: var(--tb-ink);
+  --color-ink-secondary: var(--tb-ink-secondary);
+  --color-ink-muted: var(--tb-ink-muted);
+  --color-accent: var(--tb-accent);
+  --color-accent-hover: var(--tb-accent-hover);
+  --color-accent-ink: var(--tb-accent-ink);
+  --color-accent-text: var(--tb-accent-text);
+  --color-primary: var(--tb-primary);
+  --color-primary-fg: var(--tb-primary-fg);
+  --color-info: var(--tb-info);
+  --color-success: var(--tb-success);
+  --color-warning: var(--tb-warning);
+  --color-danger: var(--tb-danger);
+  --color-danger-fg: var(--tb-danger-fg);
+
+  --color-status-passed: var(--tb-status-passed);
+  --color-status-passed-bg: var(--tb-status-passed-bg);
+  --color-status-passed-text: var(--tb-status-passed-text);
+  --color-status-failed: var(--tb-status-failed);
+  --color-status-failed-bg: var(--tb-status-failed-bg);
+  --color-status-failed-text: var(--tb-status-failed-text);
+  --color-status-blocked: var(--tb-status-blocked);
+  --color-status-blocked-bg: var(--tb-status-blocked-bg);
+  --color-status-blocked-text: var(--tb-status-blocked-text);
+  --color-status-retest: var(--tb-status-retest);
+  --color-status-retest-bg: var(--tb-status-retest-bg);
+  --color-status-retest-text: var(--tb-status-retest-text);
+  --color-status-untested: var(--tb-status-untested);
+  --color-status-untested-bg: var(--tb-status-untested-bg);
+  --color-status-untested-text: var(--tb-status-untested-text);
+
+  --color-priority-p1: var(--tb-priority-p1);
+  --color-priority-p2: var(--tb-priority-p2);
+  --color-priority-p3: var(--tb-priority-p3);
+  --color-priority-p4: var(--tb-priority-p4);
+
+  --radius-xs: var(--tb-radius-xs);
+  --radius-sm: var(--tb-radius-sm);
+  --radius-md: var(--tb-radius-md);
+  --radius-lg: var(--tb-radius-lg);
+  --radius-xl: var(--tb-radius-xl);
+
+  --shadow-sm: var(--tb-shadow-sm);
+  --shadow-md: var(--tb-shadow-md);
+  --shadow-lg: var(--tb-shadow-lg);
+
+  --font-sans: var(--tb-font-sans);
+  --font-mono: var(--tb-font-mono);
+
+  --text-xs: 0.75rem;     --text-xs--line-height: 1.4;
+  --text-sm: 0.8125rem;   --text-sm--line-height: 1.4;   /* 13 meta/table */
+  --text-base: 0.875rem;  --text-base--line-height: 1.5; /* 14 body */
+  --text-lg: 1.0625rem;   --text-lg--line-height: 1.45;
+  --text-xl: 1.25rem;     --text-xl--line-height: 1.3;
+  --text-2xl: 1.5rem;     --text-2xl--line-height: 1.25;
+  --text-kpi: 1.75rem;    --text-kpi--line-height: 1.1;
+}
+
+@layer base {
+  html { font-family: var(--tb-font-sans); font-size: 16px; background: var(--tb-bg-canvas); color: var(--tb-ink); }
+  body { font-size: 0.875rem; line-height: 1.5; font-variant-numeric: normal; }
+  .tabular, table, [data-numeric] { font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: none; box-shadow: var(--tb-focus-ring); border-radius: var(--tb-radius-sm); }
+  @media (pointer: coarse) { input, textarea, select { font-size: 16px; } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+}
+
+/* Progress-bar patterns so status segments differ without colour (see RunProgressBar). */
+.tb-pattern-failed  { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 2px, transparent 2px 6px); }
+.tb-pattern-blocked { background-image: linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px); background-size: 5px 5px; }
+.tb-pattern-retest  { background-image: radial-gradient(rgba(255,255,255,.7) 1px, transparent 1.2px); background-size: 5px 5px; }
+.tb-pattern-untested { background-image: none; box-shadow: inset 0 0 0 1px var(--tb-status-untested); background-color: var(--tb-status-untested-bg); }

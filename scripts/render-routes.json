@@ -1,0 +1,147 @@
+{
+  "_doc": "Routes for scripts/render-check.mjs. Add an entry to cover a new screen. signIn=false visits signed out. role is the CORE project role to sign in as (admin Avery, manager Raj, tester Dana, viewer Mia). Ids come from src/services/mock/fixtures.ts. expectStatus: the main document is expected to return this HTTP status (e.g. the not-found page).",
+  "roles": {
+    "admin": "Avery Quinn",
+    "manager": "Raj Patel",
+    "tester": "Dana Lee",
+    "viewer": "Mia Chen"
+  },
+  "routes": [
+    {
+      "path": "/sign-in",
+      "signIn": false
+    },
+    {
+      "path": "/does-not-exist",
+      "signIn": false,
+      "note": "not-found page",
+      "expectStatus": 404
+    },
+    {
+      "path": "/projects",
+      "signIn": true,
+      "role": "admin"
+    },
+    {
+      "path": "/projects/new",
+      "signIn": true,
+      "role": "admin"
+    },
+    {
+      "path": "/p/prj_core",
+      "signIn": true,
+      "role": "admin"
+    },
+    {
+      "path": "/p/prj_core",
+      "signIn": true,
+      "role": "viewer"
+    },
+    {
+      "path": "/p/prj_core/cases",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/cases/new",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/cases/c_1",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/cases/c_1/history",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/milestones",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/milestones/ms_24",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/plans",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/plans/plan_24",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/runs",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/runs/new",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/runs/run_web",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/runs/run_web/tests/t_run_web_1",
+      "signIn": true,
+      "role": "tester"
+    },
+    {
+      "path": "/p/prj_core/reports",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/reports/run/run_web",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/reports/milestone/ms_24",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/automation",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/automation/executions/ex_1",
+      "signIn": true,
+      "role": "manager"
+    },
+    {
+      "path": "/p/prj_core/members",
+      "signIn": true,
+      "role": "admin"
+    },
+    {
+      "path": "/p/prj_core/audit",
+      "signIn": true,
+      "role": "admin"
+    },
+    {
+      "path": "/p/prj_core/settings",
+      "signIn": true,
+      "role": "admin"
+    },
+    {
+      "path": "/p/prj_mob",
+      "signIn": true,
+      "role": "viewer",
+      "note": "second project; Mia is viewer in MOB too"
+    }
+  ]
+}

@@ -1,0 +1,227 @@
+# TestBuddy journey map 1: test plans and test runs (open -> closed, irreversible).
+# DRAFT by the AI. A cell is pre-decided ONLY where the spec states the rule; the spec file and
+# section are cited in `ref`. Every other cell is `decision: open` and points at a question (q:)
+# with a recommended answer under `suggestion`. The business owner decides every open cell.
+# Spec set: docs/database-schema.md (DB), docs/api/openapi.yaml (API), docs/design/DESIGN.md (UX),
+# docs/implementation-plan.md (PLAN), docs/adr/0003-*.md (ADR3).
+kit: journey-mapping tool/v0
+product: TestBuddy - plans and runs
+decisions: ./run-lifecycle.decisions.yaml
+
+actors:
+  - { id: admin,   name: Project admin,   group: project role }
+  - { id: manager, name: Project manager, group: project role }
+  - { id: tester,  name: Project tester,  group: project role }
+  - { id: viewer,  name: Project viewer,  group: project role }
+  - { id: ci_token, name: CI service token (acts as the mapping's run_as user) }
+  - { id: mcp_agent, name: "MCP agent (later, M3b; acts with the caller's token)" }
+  - { id: system,  name: "System (hooks, links)" }
+
+effects:
+  audit: { failure: atomic, src: doc, ref: "docs/database-schema.md Snapshot policy ('created inside the transaction by the hook'); docs/api/openapi.yaml add_result ('Transactional - writes ... audit_logs')" }
+
+not_modelled:
+  - { id: NM-1, area: contract, what: "Reopening a closed run: no endpoint and no UI exist (DESIGN section 8 'not possible'). Test that none is exposed, outside this state map.", owner: API contract test }
+  - { id: NM-2, area: other, what: "Archived project makes every write control disabled for all roles except admin Unarchive (DESIGN section 8). Modelled in a project-level map, not here.", owner: future project map }
+  - { id: NM-3, area: other, what: "MCP agent role: ADR 0003 says PocketBase rules apply to agents as to humans but agent auth is TBD (plan deferred decision 11). The actor is declared, fires no event until the owner decides.", owner: owner decision before M3b }
+  - { id: NM-4, area: numeric, what: "Progress percentages, counts and the 'N tests will stay untested' wording in the close dialog.", owner: UI test }
+
+questions:
+  - id: Q-RUN-1
+    title: Close a run that is already closed
+    priority: 2
+    record: run
+    who: admin, manager, tester
+    today: "Spec says closing is irreversible but not what a second close_run does (openapi close_run lists only 200 and 403)."
+    options: "Ignored (returns the closed run, nothing changes) or blocked (give the message)."
+    suggestion: "Ignored: return the already-closed run unchanged (idempotent); no second audit row."
+    owner: Owner
+  - id: Q-RUN-2
+    title: Close a plan that is already completed
+    priority: 3
+    record: plan
+    who: admin, manager
+    today: "Spec says close_plan is irreversible; a repeat call is not described."
+    options: "Ignored or blocked with a message."
+    suggestion: "Ignored (idempotent), same as Q-RUN-1."
+    owner: Owner
+  - id: Q-RUN-3
+    title: Who may close a plan
+    priority: 2
+    record: plan
+    who: admin, manager, tester
+    today: "DESIGN section 8 says plans: create/edit is admin and manager only (tester no). close_plan has a 403 but no role is named. Drafted as admin and manager (src: guess)."
+    options: "Admin and manager only, or testers as well (they can already close a run)."
+    suggestion: "Admin and manager only: closing a plan closes every open run in it, a wider act than closing one run."
+    owner: Owner
+  - id: Q-RUN-4
+    title: Adding a case that is already in the run
+    priority: 2
+    record: run
+    who: admin, manager, tester
+    today: "Schema has a unique (run, case) index so a duplicate cannot be stored. What the API answers is not described."
+    options: "Skip the duplicate and add the rest, or refuse the whole request with a message."
+    suggestion: "Skip duplicates and return only the newly added tests (idempotent add; matches the idempotent style of the other batch calls)."
+    owner: Owner
+  - id: Q-RUN-5
+    title: Removing a case that already has a result
+    priority: 1
+    record: run
+    who: admin, manager, tester
+    today: "DESIGN 6.10 says Remove from run is allowed 'before results only'. The refusal message is not written."
+    options: "Confirm the refusal and give the message."
+    suggestion: "Refuse with: 'This test already has results. Results cannot be removed from an open run.'"
+    owner: Owner
+  - id: Q-RUN-6
+    title: Create a run directly inside a completed plan
+    priority: 2
+    record: run
+    who: admin, manager, tester
+    today: "add_plan_entry on a completed plan is refused (openapi 'open plan'; DESIGN section 8). add_run accepts an optional plan field; the spec does not say what happens when that plan is completed."
+    options: "Refuse like add_plan_entry, or allow."
+    suggestion: "Refuse: a completed plan is read-only everywhere (DESIGN section 8 rule applied to the add_run path)."
+    owner: Owner
+  - id: Q-RUN-7
+    title: Does a plan complete itself when its last run closes
+    priority: 3
+    record: plan
+    who: system
+    today: "Plans have is_completed set by close_plan. Nothing says closing the last open run completes the plan."
+    options: "Manual only, or automatic."
+    suggestion: "Manual only (TestRail behaviour the spec cites); show 'all runs closed' as a hint."
+    owner: Owner
+  - id: Q-RUN-8
+    title: Add a run result or create a run as an MCP agent
+    priority: 3
+    record: run
+    who: mcp_agent
+    today: "ADR 0003 section 3: agents use the caller's token so the caller's project role applies. Token design is TBD."
+    options: "Agent has exactly the role of the user whose token it uses (then no new rules), or a fixed agent role."
+    suggestion: "Same role as the token's user, never higher; log the agent as the actor in audit_logs."
+    owner: Owner
+
+entities:
+  - id: plan
+    name: Test plan
+    tier: B
+    src: doc
+    states: [open, completed]
+    initial: open
+    terminal: [completed]
+    create: { event: create_plan, actors: [admin, manager], to: open }
+    events:
+      create_plan:    { actors: [admin, manager], name: Create a plan }
+      update_plan:    { actors: [admin, manager], name: Edit plan details }
+      add_plan_entry: { actors: [admin, manager], name: Add an entry (a run for one suite) }
+      close_plan:     { actors: [admin, manager], name: Close the plan (irreversible) }
+    guards:
+      plan_name_unique:
+        description: Plan name is unique inside the project
+        false_case: A second plan with an existing name
+        kind: relation
+      suite_chosen:
+        description: The entry names a suite
+        false_case: An entry with no suite
+    transitions:
+      - { id: PLN-1, from: open, on: update_plan, to: open, effects: [audit], expect: The plan details are saved, src: doc, ref: "docs/design/DESIGN.md section 8 (Plans: create, edit = admin, manager)" }
+      - { id: PLN-2, from: open, on: add_plan_entry, to: open, guards: [suite_chosen], effects: [audit], expect: "A run for that suite is created inside the plan with its cases snapshotted", src: doc, ref: "docs/api/openapi.yaml /add_plan_entry; docs/database-schema.md test_runs note 2" }
+      - { id: PLN-3, from: open, on: close_plan, to: completed, effects: [audit], expect: "The plan shows as completed and every open run in it is closed", src: guess, ref: "docs/api/openapi.yaml /close_plan ('Closes all open runs of the plan and marks it completed')", q: Q-RUN-3 }
+    cells:
+      - { state: completed, on: update_plan,    decision: rejected, message: "This plan is completed and can no longer be edited.", src: doc, ref: "docs/design/DESIGN.md section 8 ('Completed milestone/plan: edit disabled, view allowed'); message wording is a draft" }
+      - { state: completed, on: add_plan_entry, decision: rejected, message: "This plan is completed. Entries cannot be added.", src: doc, ref: "docs/api/openapi.yaml /add_plan_entry ('to an open plan'); message wording is a draft" }
+      - { state: completed, on: close_plan, decision: open, q: Q-RUN-2 }
+
+  - id: run
+    name: Test run
+    tier: A
+    src: doc
+    states: [open, closed]
+    initial: open
+    terminal: [closed]
+    create: { event: create_run, actors: [admin, manager, tester], to: open, guards: [name_present, name_unique_in_plan, selection_valid] }
+    events:
+      create_run:   { actors: [admin, manager, tester], name: Create a run }
+      update_run:   { actors: [admin, manager, tester], name: "Edit run details (name, build, assignee)" }
+      add_case:     { actors: [admin, manager, tester], name: Add cases to the run (add_case_to_run) }
+      remove_case:  { actors: [admin, manager, tester], name: Remove a test from the run }
+      add_result:   { actors: [admin, manager, tester, ci_token], name: Record a result on a test in this run }
+      close_run:    { actors: [admin, manager, tester], name: Close the run (irreversible) }
+      close_by_plan: { actors: [system], trigger: link, name: Plan was closed }
+    guards:
+      name_present:
+        description: Run name is filled in
+        false_case: A run with an empty name
+        src: doc
+        ref: "docs/design/DESIGN.md 6.9 Validation ('name required')"
+      name_unique_in_plan:
+        description: Run name is unique per (project, plan)
+        false_case: A second run with the same name in the same plan
+        src: doc
+        ref: "docs/database-schema.md test_runs index idx_runs_name ('hook also validates ... friendly 400')"
+      selection_valid:
+        description: At least one case is chosen unless the run includes all cases
+        false_case: Explicit selection mode with zero cases
+        message: "Add at least one case, or include all cases."
+        src: doc
+        ref: "docs/design/DESIGN.md 6.9 Validation ('at least 1 case unless include-all'); message wording is a draft"
+      case_not_deprecated:
+        description: The case is not deprecated
+        false_case: A deprecated case id in the request
+        src: doc
+        ref: "docs/api/openapi.yaml /add_case_to_run ('Deprecated cases rejected')"
+      case_not_in_run:
+        description: The case is not already a test in this run
+        false_case: A case id already in the run
+        src: doc
+        ref: "docs/database-schema.md test_run_cases unique (run, case); API behaviour not described, see Q-RUN-4"
+        x-q: Q-RUN-4
+      test_has_no_results:
+        description: The test has no recorded result yet
+        false_case: Removing a test that already has a result
+        src: doc
+        ref: "docs/design/DESIGN.md 6.10 ('Remove from run (before results only)')"
+        x-q: Q-RUN-5
+      status_postable:
+        description: The posted status is not Untested
+        false_case: A result with status Untested
+        src: doc
+        ref: "docs/database-schema.md statuses ('Untested ... cannot be posted as a result (hooks reject it)')"
+    transitions:
+      - { id: RUN-1, from: open, on: update_run, to: open, effects: [audit], expect: The run details are saved, src: doc, ref: "docs/database-schema.md test_runs Rules ('TESTER write (open runs)')" }
+      - { id: RUN-2, from: open, on: add_case, to: open, guards: [case_not_deprecated, case_not_in_run], effects: [audit], expect: "The cases appear as tests, Untested, with their snapshot at the current case version", src: doc, ref: "docs/api/openapi.yaml /add_case_to_run" }
+      - { id: RUN-3, from: open, on: remove_case, to: open, guards: [test_has_no_results], effects: [audit], expect: The test disappears from the run, src: doc, ref: "docs/design/DESIGN.md 6.10 selection bar" }
+      - { id: RUN-4, from: open, on: add_result, to: open, guards: [status_postable], effects: [audit], expect: "The result is appended and the test status becomes the latest result", src: doc, ref: "docs/api/openapi.yaml /add_result; detail in test-result-lifecycle map" }
+      - { id: RUN-5, from: open, on: close_run, to: closed, effects: [audit], expect: "Run shows Closed with date and user, progress is frozen, snapshots are frozen; untested tests stay untested", src: doc, ref: "docs/api/openapi.yaml /close_run ('Irreversible. Freezes all snapshots; blocks further result writes'); docs/design/DESIGN.md 6.10" }
+      - { id: RUN-6, from: open, on: close_by_plan, to: closed, effects: [audit], expect: The run is closed together with its plan, src: doc, ref: "docs/api/openapi.yaml /close_plan" }
+    cells:
+      - { state: closed, on: update_run,  decision: rejected, message: "Run is closed. Results can no longer be changed.", src: doc, ref: "docs/database-schema.md test_runs Rules ('open runs'); docs/design/DESIGN.md 6.10 and section 9 (wording)" }
+      - { state: closed, on: add_case,    decision: rejected, message: "Run is closed. Results can no longer be changed.", src: doc, ref: "docs/api/openapi.yaml /add_case_to_run ('to an open run'); wording from DESIGN section 9" }
+      - { state: closed, on: remove_case, decision: rejected, message: "Run is closed. Results can no longer be changed.", src: doc, ref: "docs/design/DESIGN.md 6.10 ('every write control hidden or disabled')" }
+      - { state: closed, on: add_result,  decision: rejected, message: "Run is closed. Results can no longer be changed.", src: doc, ref: "docs/api/openapi.yaml /add_result, /add_results ('Rejects if run closed'); DESIGN section 9" }
+      - { state: closed, on: close_run,   decision: open, q: Q-RUN-1 }
+      - { state: closed, on: close_by_plan, decision: ignored, src: doc, ref: "docs/api/openapi.yaml /close_plan ('Closes all open runs')" }
+
+links:
+  - { id: LNK-1, when: { entity: plan, transition: PLN-3 }, then: { entity: run, event: close_by_plan }, src: doc }
+
+journeys:
+  - id: J-1
+    name: Tester closes a finished run
+    role: tester
+    tier: A
+    start: { run: open }
+    steps:
+      - { do: run.RUN-2, screen: "/p/{projectId}/runs/{runId}" }
+      - { do: run.RUN-4, screen: "/p/{projectId}/runs/{runId}" }
+      - { do: run.RUN-5, screen: "/p/{projectId}/runs/{runId}" }
+    end: { run: closed }
+  - id: J-2
+    name: Manager closes a plan and its runs close with it
+    role: manager
+    tier: B
+    start: { plan: open, run: open }
+    steps:
+      - { do: plan.PLN-3, screen: "/p/{projectId}/plans" }
+    end: { plan: completed, run: closed }
+
+walk_unwalked: true

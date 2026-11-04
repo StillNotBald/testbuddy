@@ -1,0 +1,902 @@
+openapi: 3.0.3
+info:
+  title: Test Management Platform — Façade API (baseline)
+  version: 1.0.0
+  description: |
+    TestRail-inspired façade under `/api/v1`. TestBuddy is NOT wire-compatible with
+    TestRail clients (ADR 0003); use the TestRail importer to migrate data. Per [ADR 0002](../adr/0002-api-first-design-testrail-reference.md)
+    this surface covers trusted server-side operations only: execution transactions, immutable
+    snapshots, batch result submission, imports (TestRail XML/CSV, generic JSON cases, JUnit/Robot), automation posting, reporting and
+    audit-logged mutations. Standard CRUD is served by the PocketBase native collection API and is
+    NOT duplicated here.
+
+    Domain model and route naming are inspired by the TestRail API reference:
+    https://support.testrail.com/hc/en-us/sections/7077185274644-API-reference
+    (naming reference only; payloads differ).
+
+    Conventions: relations use an `_id` suffix; `estimate`/`elapsed` are integer seconds;
+    `defects` is an array of strings; timestamps are unix seconds. Lists return
+    `{offset, limit, size, total, items}`. Limits: at most 1,000 results per batch, 25 MB body.
+    Rate limiting uses PocketBase's built-in limiter; exceeded requests get `429` with `Retry-After`.
+
+    This file is the source of truth. An endpoint implemented in `pb_hooks/` without its
+    definition here is incomplete (ADR 0002, rule 1). New endpoints beyond the baseline are
+    welcome if they follow the same conventions and are specced first.
+
+servers:
+  - url: /api/v1
+    description: Façade (pb_hooks), served by the PocketBase process
+
+tags:
+  - { name: Projects }
+  - { name: Cases }
+  - { name: Runs }
+  - { name: Plans }
+  - { name: Tests }
+  - { name: Results }
+  - { name: Attachments }
+  - { name: Milestones }
+  - { name: Imports }
+  - { name: System }
+
+security:
+  - bearerAuth: []
+  - ciToken: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: PocketBase user JWT (authWithPassword / OAuth2).
+    ciToken:
+      type: apiKey
+      in: header
+      name: X-API-Token
+      description: >
+        Service/automation token for CI result posting. Validated against an
+        automation_mappings record by the auth hook. Identity is the mapped user,
+        never a shared write-all key. A mapping can have many tokens (collection `automation_tokens`);
+        create and revoke are project-admin only. Missing, malformed, unknown, revoked or expired token: `401`.
+        A valid token that is not allowed (token of another project, or the mapping's `run_as` user is
+        inactive or lacks tester/manager/admin): `403`. (Closes schema gap #12 — CI authentication.)
+
+  parameters:
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, default: 0 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+      description: Pagination ceiling = 500.
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "Field :title is a required field."
+      description: >
+        Single-field error envelope (TestRail style). `401` = missing or invalid credentials (including a
+        revoked or expired CI token). `403` = valid credentials without permission (wrong project, role too low,
+        `run_as` user cannot write). `409` = conflict with current state.
+
+    PaginatedResponse:
+      type: object
+      required: [offset, limit, size, total, items]
+      properties:
+        offset: { type: integer }
+        limit:  { type: integer }
+        size:   { type: integer, description: number of items returned in this page }
+        total:  { type: integer, description: total items matching the query }
+        items:
+          type: array
+          items: { type: object }
+
+    Project:
+      type: object
+      properties:
+        id: { type: string }
+        workspace_id: { type: string }
+        name: { type: string }
+        announcement: { type: string }
+        ref_prefix: { type: string, example: CORE }
+        is_archived: { type: boolean }
+
+    Case:
+      type: object
+      properties:
+        id:      { type: string }
+        ref:     { type: string, example: CORE-C42, description: human-readable, hook-assigned }
+        source_key: { type: string, description: optional external key; unique per project when set }
+        project_id: { type: string }
+        suite_id:    { type: string }
+        section_id:  { type: string }
+        title:   { type: string }
+        content: { type: string, description: description / preconditions }
+        priority_id:   { type: string, nullable: true }
+        type_id:  { type: string, nullable: true }
+        milestone_id: { type: string, nullable: true }
+        automation_status:
+          type: string
+          enum: [not_specified, needs_review, needs_automation, in_progress, automated, not_automatable]
+        estimate: { type: integer, description: seconds }
+        refs: { type: string }
+        deprecated: { type: boolean }
+        deprecated_reason: { type: string }
+        version:  { type: integer }
+        tags:     { type: array, items: { type: string } }
+        steps:    { type: array, items: { $ref: '#/components/schemas/CaseStep' } }
+        created_on: { type: integer }
+        updated_on: { type: integer }
+
+    CaseStep:
+      type: object
+      properties:
+        position:          { type: integer }
+        description:       { type: string }
+        expected_result:   { type: string }
+
+    Run:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        project_id: { type: string }
+        suite_id: { type: string }
+        plan_id: { type: string, nullable: true }
+        milestone_id: { type: string, nullable: true }
+        assigned_to_id: { type: string, nullable: true }
+        build: { type: string }
+        refs: { type: string }
+        include_all: { type: boolean }
+        case_ids: { type: array, items: { type: string } }
+        is_closed: { type: boolean }
+        started_on: { type: integer, nullable: true }
+        finished_on: { type: integer, nullable: true }
+
+    Plan:
+      type: object
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        milestone_ids: { type: array, items: { type: string } }
+        builds: { type: string }
+        refs: { type: string }
+        owner_id: { type: string, nullable: true }
+        is_completed: { type: boolean }
+
+    PlanEntry:
+      type: object
+      required: [suite_id]
+      description: Creates one run in the plan for the suite.
+      properties:
+        suite_id: { type: string }
+        name: { type: string }
+        include_all: { type: boolean }
+        case_ids: { type: array, items: { type: string } }
+        assigned_to_id: { type: string, nullable: true }
+
+    Test:
+      type: object
+      description: A case instance inside a run (a test_run_cases row).
+      properties:
+        id: { type: string }
+        run_id: { type: string }
+        case_id: { type: string, nullable: true, description: null if the case was hard-deleted; history is in the snapshot }
+        refs: { type: string }
+        version: { type: integer }
+        status_id: { type: string }
+        assigned_to_id: { type: string, nullable: true }
+        case_snapshot: { type: object }
+
+    StepResult:
+      type: object
+      required: [step_position, status_id]
+      properties:
+        step_position: { type: integer, description: position inside the test's case_snapshot }
+        status_id: { type: string }
+        comment: { type: string }
+
+    Result:
+      type: object
+      properties:
+        id: { type: string }
+        test_id: { type: string }
+        case_id: { type: string, nullable: true }
+        status_id: { type: string, description: any status except Untested }
+        comment: { type: string }
+        version: { type: integer }
+        elapsed: { type: integer, description: seconds }
+        defects: { type: array, items: { type: string }, example: ["CORE-47", "CORE-49"] }
+        assigned_to_id: { type: string, nullable: true }
+        step_results: { type: array, items: { $ref: '#/components/schemas/StepResult' } }
+        created_on: { type: integer }
+
+    ResultInput:
+      description: Result body; `test_id` (add_results) or `case_id` (add_results_for_cases) identifies the target.
+      allOf:
+        - $ref: '#/components/schemas/Result'
+        - type: object
+          properties:
+            test_id: { type: string }
+            case_id: { type: string }
+
+    ResultsBatchByTest:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          maxItems: 1000
+          items:
+            allOf:
+              - $ref: '#/components/schemas/ResultInput'
+              - { type: object, required: [test_id] }
+
+    ResultsBatchByCase:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          maxItems: 1000
+          items:
+            allOf:
+              - $ref: '#/components/schemas/ResultInput'
+              - { type: object, required: [case_id] }
+
+    Milestone:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        project_id: { type: string }
+        description: { type: string }
+        is_completed: { type: boolean }
+        is_past_due: { type: boolean }
+        expires_on: { type: integer, nullable: true }
+
+    # --- Import payloads ---
+    ImportCases:
+      type: object
+      required: [suites]
+      description: >
+        Generic hierarchical case import (suites, sections, cases, steps). Every case carries
+        `source_key`; re-import upserts by (project, source_key) and never duplicates.
+        Suites and sections are matched by name path.
+      properties:
+        suites:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string }
+              description: { type: string }
+              sections:
+                type: array
+                items: { $ref: '#/components/schemas/ImportSection' }
+    ImportSection:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        sections:
+          type: array
+          description: nested sections (depth limit per schema)
+          items: { type: object }
+        cases:
+          type: array
+          items:
+            type: object
+            required: [source_key, title]
+            properties:
+              source_key: { type: string }
+              title: { type: string }
+              content: { type: string }
+              priority: { type: string, description: priority name or short_name }
+              type: { type: string, description: case type name }
+              estimate: { type: integer }
+              refs: { type: string }
+              tags: { type: array, items: { type: string } }
+              steps: { type: array, items: { $ref: '#/components/schemas/CaseStep' } }
+
+    ImportSummary:
+      type: object
+      properties:
+        created: { type: integer }
+        updated: { type: integer }
+        unchanged: { type: integer }
+        skipped: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              source_key: { type: string }
+              error: { type: string }
+
+    # --- Automation / import payloads ---
+    AutomationResult:
+      type: object
+      description: One result posted by a CI/automation client (idempotent batch).
+      required: [case_ref, status]
+      properties:
+        case_ref:  { type: string, example: CORE-C42, description: mapped to test_cases.ref }
+        status:
+          type: string
+          enum: [passed, blocked, retest, failed]
+          description: >
+            Lowercase name mapped case-insensitively to statuses.name (Passed, Blocked, Retest, Failed).
+            `untested` is not postable.
+        comment:   { type: string }
+        elapsed:   { type: integer, description: seconds }
+        step_results: { type: array, items: { $ref: '#/components/schemas/StepResult' } }
+        defects:   { type: array, items: { type: string } }
+        # No item-level idempotency key: `execution.external_execution_id` is the only key (owner decision Q-CI-13).
+
+    AutomationBatch:
+      type: object
+      required: [execution, results]
+      properties:
+        execution:
+          type: object
+          required: [external_execution_id, run_id]
+          properties:
+            external_execution_id: { type: string, description: the only idempotency key (batch level) }
+            run_id:  { type: string, description: required; must be an open run of this project }
+            build:   { type: string }
+            branch:  { type: string }
+            commit:  { type: string }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/AutomationResult' }
+
+  responses:
+    BadRequest:
+      description: Validation/input error
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthorized:
+      description: Missing/invalid authentication
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: Permission denied
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: Resource not found
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: >
+        Conflict with the current state (for example an execution id reused with different results,
+        or an execution that is still being processed)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooManyRequests:
+      description: Rate limit exceeded (PocketBase rate limiter)
+      headers:
+        Retry-After: { schema: { type: integer }, description: seconds to wait }
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    PayloadTooLarge:
+      description: Body over 25 MB or batch over 1,000 results
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+paths:
+  # ---------- Cases ----------
+  /get_case/{case_id}:
+    get:
+      tags: [Cases]
+      parameters: [{ name: case_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /get_cases/{project_id}:
+    get:
+      tags: [Cases]
+      parameters:
+        - { name: project_id, in: path, required: true, schema: { type: string } }
+        - { name: suite_id,  in: query, schema: { type: string } }
+        - { name: section_id, in: query, schema: { type: string } }
+        - { name: priority_id, in: query, schema: { type: string } }
+        - { name: type_id, in: query, schema: { type: string } }
+        - { name: automation_status, in: query, schema: { type: string } }
+        - { name: created_after, in: query, schema: { type: integer } }
+        - { name: updated_before, in: query, schema: { type: integer } }
+        - { $ref: '#/components/parameters/Offset' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Paginated cases
+          content: { application/json: { schema: { $ref: '#/components/schemas/PaginatedResponse' } } }
+
+  /add_case/{section_id}:
+    post:
+      tags: [Cases]
+      description: Assigns `ref` and version 1 atomically; writes audit_logs.
+      parameters: [{ name: section_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } }
+      responses:
+        '201': { description: Created case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /update_case/{case_id}:
+    post:
+      tags: [Cases]
+      description: >
+        Creates a new test_case_versions snapshot; bumps version. Allowed on a deprecated case (new version,
+        stays deprecated). A move to another section (`section_id` only) creates no version. `404` if the case is gone.
+      parameters: [{ name: case_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } }
+      responses:
+        '200': { description: Updated case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /delete_case/{case_id}:
+    post:
+      tags: [Cases]
+      description: |
+        No results: hard delete (cascades versions, steps, tags; removed from open runs).
+        Has results: sets `deprecated=true`; the case is excluded from new runs, tests that already have
+        results stay in open runs (with results and case_snapshot), tests without results are removed.
+        Returns what happened. Deleting a case that is already gone: `404 Not found`.
+      parameters: [{ name: case_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200':
+          description: Outcome
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  outcome: { type: string, enum: [deleted, deprecated] }
+                  case: { $ref: '#/components/schemas/Case' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reactivate_case/{case_id}:
+    post:
+      tags: [Cases]
+      description: >
+        Clears `deprecated` on a deprecated case (tester and above). Creates no new version; writes
+        audit_logs (`case.reactivate`). Open runs are not changed. Reactivating an active case is a no-op.
+      parameters: [{ name: case_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Active case, content: { application/json: { schema: { $ref: '#/components/schemas/Case' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /get_case_history/{case_id}:
+    get:
+      tags: [Cases]
+      parameters: [{ name: case_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Ordered version snapshots (newest first), content: { application/json: { schema: { type: array, items: { type: object } } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------- Runs ----------
+  /get_run/{run_id}:
+    get:
+      tags: [Runs]
+      parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Run, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+
+  /get_runs/{project_id}:
+    get:
+      tags: [Runs]
+      parameters:
+        - { name: project_id, in: path, required: true, schema: { type: string } }
+        - { name: is_completed, in: query, schema: { type: boolean } }
+        - { $ref: '#/components/parameters/Offset' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Paginated runs, content: { application/json: { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } }
+
+  /add_run/{project_id}:
+    post:
+      tags: [Runs]
+      description: >
+        Snapshots selected cases into test_run_cases (case_snapshot). If `plan` names a completed plan the
+        request is refused (`400`, "This plan is completed. Runs cannot be added to it.").
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } }
+      responses:
+        '201': { description: Created run, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /update_run/{run_id}:
+    post:
+      tags: [Runs]
+      parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+      responses:
+        '200': { description: Updated run, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+
+  /close_run/{run_id}:
+    post:
+      tags: [Runs]
+      description: >
+        Irreversible. Freezes all snapshots; blocks further result writes. Idempotent: closing an already
+        closed run returns it unchanged (`200`, no second audit row).
+      parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Closed run, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ---------- Tests ----------
+  /get_test/{test_id}:
+    get:
+      tags: [Tests]
+      parameters: [{ name: test_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Test, content: { application/json: { schema: { $ref: '#/components/schemas/Test' } } } }
+
+  /get_tests/{run_id}:
+    get:
+      tags: [Tests]
+      parameters:
+        - { name: run_id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Offset' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Paginated tests, content: { application/json: { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } }
+
+  # ---------- Results ----------
+  /get_results/{test_id}:
+    get:
+      tags: [Results]
+      description: Full history for a test (most recent first).
+      parameters:
+        - { name: test_id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Offset' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200': { description: Paginated results, content: { application/json: { schema: { $ref: '#/components/schemas/PaginatedResponse' } } } }
+
+  /add_result/{test_id}:
+    post:
+      tags: [Results]
+      description: >
+        Transactional — writes test_results + test_step_results + audit_logs (if the audit write fails nothing is
+        recorded). Rejects (`400`) if the run is closed ("Run is closed. Results can no longer be changed."),
+        the status is `untested`, a status that requires a comment has none ("A comment is required for this status."),
+        a step result points outside the case snapshot, repeats a position or is `untested`, or the version is stale.
+        Stale = the client sent a `version` that differs from the test's current snapshot version
+        ("This test changed while you were working. Reload and try again."); a request without `version` is accepted.
+        If the test was removed from the run: `404` "This test was removed from the run."
+        Editing a posted result (native API) changes only comment, elapsed, defects, build and refs; never the status.
+      parameters: [{ name: test_id, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResultInput' } } } }
+      responses:
+        '201': { description: Created result, content: { application/json: { schema: { $ref: '#/components/schemas/Result' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /add_result_for_case/{run_id}/{case_id}:
+    post:
+      tags: [Results]
+      description: Resolves run+case to a test then applies add_result rules.
+      parameters:
+        - { name: run_id, in: path, required: true, schema: { type: string } }
+        - { name: case_id, in: path, required: true, schema: { type: string } }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ResultInput' } } } }
+      responses:
+        '201': { description: Created result, content: { application/json: { schema: { $ref: '#/components/schemas/Result' } } } }
+
+  /add_results/{run_id}:
+    post:
+      tags: [Results]
+      description: >
+        Batch append across tests in a run, addressed by `test_id`. Atomic; max 1,000 results.
+        Rejects `untested`, closed runs. Item-level validation errors fail the whole batch (400 with `errors[]`).
+      parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResultsBatchByTest' } } }
+      responses:
+        '201': { description: Created results, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Result' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /add_results_for_cases/{run_id}:
+    post:
+      tags: [Results]
+      description: Same as add_results, but each item is addressed by `case_id` (resolved to the run's test). Max 1,000 results.
+      parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResultsBatchByCase' } } }
+      responses:
+        '201': { description: Created results, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Result' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ---------- Attachments ----------
+  /add_attachment_to_result/{result_id}:
+    post:
+      tags: [Attachments]
+      security: [bearerAuth: []]
+      description: >
+        Multipart upload; subject to file type/size constraints in the schema. Refused when the run is closed.
+        Deleting an attachment is also refused once the run is closed (native API).
+      parameters: [{ name: result_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties: { file: { type: string, format: binary } }
+      responses:
+        '201': { description: Attachment record id }
+
+  # ---------- Milestones ----------
+  /get_milestones/{project_id}:
+    get:
+      tags: [Milestones]
+      parameters:
+        - { name: project_id, in: path, required: true, schema: { type: string } }
+        - { $ref: '#/components/parameters/Offset' }
+        - { $ref: '#/components/parameters/Limit' }
+      responses:
+        '200':
+          description: Paginated milestones
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/Milestone' } }
+
+  # ---------- Automation / CI (beyond TestRail baseline; API-first) ----------
+  /post_results_automation/{project_id}:
+    post:
+      tags: [Results]
+      security: [ciToken: []]
+      description: |
+        Idempotent batch result submission for Robot Framework / JUnit / pytest.
+        `external_execution_id` is the idempotency key; re-POSTing the same batch
+        must not create duplicate test_results (spec §4.2). Maps `case_ref` via
+        automation_mappings. Max 1,000 results per request. Results are written as `run_as`
+        of the mapping's token; `run_as` must be active with tester, manager or admin in the project
+        (checked at post time, else `403` "The CI user cannot write results.").
+
+        Rules (owner decisions, 2026-11-04):
+        - `execution.run_id` is required and the run must be open; a missing id or a closed run refuses the
+          batch (`400`; closed run: "Run is closed. Results can no longer be changed.").
+        - Same `external_execution_id`, identical payload, completed: `200` with the stored summary. Different
+          payload: `409` "This execution id was already used with different results." Still `in_progress`: `409`
+          "This execution is still being processed. Try again shortly." Previously `failed`: retry is allowed and
+          reprocesses under the same execution record.
+        - An execution stuck `in_progress` for 15 minutes is marked `failed` so the client can retry.
+        - Malformed item or non-postable status: whole batch fails, `400` with `errors[]`. A `case_ref` that
+          matches no case or a deprecated case is handled per the mapping (`on_unmatched`, `on_deprecated`,
+          default skip): the item is skipped and reported (`unmatched` / `skipped` with a warning) and the rest
+          is kept; `reject` fails the batch.
+        - Results for tests that already have results are appended (history grows; latest wins).
+        - The batch and its audit rows are one transaction; if the audit write fails nothing is recorded.
+        - A token of another project: `403` "This token does not belong to this project."
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AutomationBatch' } } }
+      responses:
+        '200': { description: Accepted/already-processed execution summary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ---------- Projects ----------
+  /add_project:
+    post:
+      tags: [Projects]
+      description: Transaction - creates the project and the caller as `admin` member; audit-logged.
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+      responses:
+        '201': { description: Created project, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /update_project/{project_id}:
+    post:
+      tags: [Projects]
+      description: Update name/announcement/archive flag (project ADMIN); audit-logged.
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+      responses:
+        '200': { description: Updated project, content: { application/json: { schema: { $ref: '#/components/schemas/Project' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /delete_project/{project_id}:
+    post:
+      tags: [Projects]
+      description: ADMIN only. Cascades all project data; audit-logged with project_name snapshot.
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ---------- Plans ----------
+  /get_plan/{plan_id}:
+    get:
+      tags: [Plans]
+      parameters: [{ name: plan_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Plan with its runs, content: { application/json: { schema: { $ref: '#/components/schemas/Plan' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /add_plan/{project_id}:
+    post:
+      tags: [Plans]
+      description: Creates a plan, optionally with `entries` (each creates a run with its cases snapshotted).
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/Plan'
+                - type: object
+                  properties:
+                    entries: { type: array, items: { $ref: '#/components/schemas/PlanEntry' } }
+      responses:
+        '201': { description: Created plan, content: { application/json: { schema: { $ref: '#/components/schemas/Plan' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /add_plan_entry/{plan_id}:
+    post:
+      tags: [Plans]
+      description: Adds one entry (a run for one suite) to an open plan.
+      parameters: [{ name: plan_id, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PlanEntry' } } } }
+      responses:
+        '201': { description: Created run, content: { application/json: { schema: { $ref: '#/components/schemas/Run' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /close_plan/{plan_id}:
+    post:
+      tags: [Plans]
+      description: >
+        Irreversible. Closes all open runs of the plan and marks it completed. Admin and manager only.
+        Idempotent on an already completed plan (returns it unchanged). A plan does not complete itself when
+        its last run closes.
+      parameters: [{ name: plan_id, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: Closed plan, content: { application/json: { schema: { $ref: '#/components/schemas/Plan' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ---------- Run membership ----------
+  /add_case_to_run/{run_id}:
+    post:
+      tags: [Runs]
+      description: Adds cases (snapshotted at their current version) to an open run. Deprecated cases rejected. A case already in the run is skipped (no error); the response lists only the newly added tests. `update_run` does not change case selection.
+      parameters: [{ name: run_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [case_ids]
+              properties: { case_ids: { type: array, items: { type: string } } }
+      responses:
+        '200': { description: Tests added, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Test' } } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # ---------- Imports ----------
+  /import_cases/{project_id}:
+    post:
+      tags: [Imports]
+      description: >
+        Generic JSON import (suites -> sections -> cases -> steps), idempotent by `source_key`
+        (used by journey-mapping tool). Existing cases with the same source_key are updated (new version)
+        only if content changed. Counts as one audit-logged operation. Admin and manager only (`403` otherwise).
+        A `source_key` that matches a hard-deleted case creates a fresh case with a new ref (counted as created).
+        A match on a deprecated case updates the content and leaves it deprecated.
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ImportCases' } } } }
+      responses:
+        '200': { description: Summary, content: { application/json: { schema: { $ref: '#/components/schemas/ImportSummary' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /import_testrail/{project_id}:
+    post:
+      tags: [Imports]
+      description: >
+        TestRail migration. Multipart upload of TestRail's XML case export (or CSV export).
+        Suites/sections/cases/steps are created; `source_key` is derived from the TestRail ids so
+        re-import is idempotent. Cases only (no results history) in v1.
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                format: { type: string, enum: [xml, csv], description: default inferred from extension }
+                suite_name: { type: string, description: target suite name for CSV or single-suite XML }
+      responses:
+        '200': { description: Summary, content: { application/json: { schema: { $ref: '#/components/schemas/ImportSummary' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /import_results_file/{project_id}:
+    post:
+      tags: [Imports]
+      security: [ciToken: [], bearerAuth: []]
+      description: >
+        Raw framework output (JUnit XML or Robot output.xml) as multipart with `framework`; the hook
+        converts it to an AutomationBatch and runs the same pipeline as post_results_automation
+        (idempotent by `external_execution_id`, same `run_id`, mapping, 409 and timeout rules). With a user bearer
+        token, admin, manager and tester may upload; viewer is refused (`403`).
+      parameters: [{ name: project_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [framework, file, external_execution_id, run_id]
+              properties:
+                framework: { type: string, enum: [junit, robot] }
+                file: { type: string, format: binary }
+                external_execution_id: { type: string }
+                run_id: { type: string, description: required; must be an open run }
+                build: { type: string }
+                branch: { type: string }
+                commit: { type: string }
+      responses:
+        '200': { description: Execution summary }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  # ---------- System ----------
+  /health:
+    get:
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: Liveness
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string }

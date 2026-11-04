@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suite>
+  <id>S7</id>
+  <name>Account Portal</name>
+  <description>Fictional sample suite.</description>
+  <sections>
+    <section>
+      <name>Login</name>
+      <description/>
+      <cases>
+        <case>
+          <id>C101</id>
+          <title>Valid sign-in</title>
+          <template>Test Case (Steps)</template>
+          <type>Smoke &amp; Sanity</type>
+          <priority>High</priority>
+          <references>PORTAL-12</references>
+          <custom>
+            <preconds>A registered user exists.</preconds>
+            <steps_separated>
+              <step>
+                <index>1</index>
+                <content>Open the sign-in page</content>
+                <expected>The form is shown</expected>
+              </step>
+              <step>
+                <index>2</index>
+                <content>Enter valid credentials and submit</content>
+                <expected>The dashboard opens</expected>
+              </step>
+            </steps_separated>
+          </custom>
+        </case>
+        <case>
+          <id>C102</id>
+          <title>Locked account</title>
+          <type>Functional</type>
+          <priority>Critical</priority>
+          <custom>
+            <preconds/>
+            <steps><![CDATA[<p>Enter the <b>wrong</b> password &amp; submit</p>]]></steps>
+            <expected>An error is shown</expected>
+          </custom>
+        </case>
+      </cases>
+      <sections>
+        <section>
+          <name>Social</name>
+          <cases>
+            <case>
+              <id>C103</id>
+              <title>Anmeldung über Konto 登录 🙂</title>
+              <type>Usability</type>
+              <priority>Medium</priority>
+              <custom>
+                <preconds>Café “Zoë” account linked.</preconds>
+                <steps_separated>
+                  <step>
+                    <index>1</index>
+                    <content>Choose 社交登录</content>
+                    <expected>Redirect works ✓</expected>
+                  </step>
+                </steps_separated>
+              </custom>
+            </case>
+          </cases>
+        </section>
+      </sections>
+    </section>
+    <section>
+      <name>Profile</name>
+      <cases>
+        <case>
+          <id>C104</id>
+          <title>Update display name</title>
+          <type>Regression</type>
+          <priority>Low</priority>
+          <custom>
+            <steps>Change the name and save</steps>
+            <expected>The new name is shown</expected>
+          </custom>
+        </case>
+      </cases>
+    </section>
+  </sections>
+</suite>

@@ -1,0 +1,163 @@
+# decisions.yaml: the owner's answers, appended by `journey-mapping tool decide`. Append-only; the map itself is never edited.
+- id: D-001
+  q: Q-CASE-1
+  cells:
+    - case.CELL.deprecated.update_case
+  decision: allowed
+  goes_to: deprecated
+  message: A new version is saved; the case stays deprecated.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: ""
+  supersedes: null
+- id: D-002
+  q: Q-CASE-1
+  cells:
+    - case.CELL.deprecated.restore_version
+  decision: allowed
+  goes_to: deprecated
+  message: The old content becomes a new version; the case stays deprecated.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: ""
+  supersedes: null
+- id: D-003
+  q: Q-CASE-2
+  cells:
+    - case.CELL.deprecated.reactivate
+  decision: allowed
+  goes_to: active
+  message: The case is active again. No new version; audit-logged.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Tester and above.
+  supersedes: null
+- id: D-004
+  q: Q-CASE-2
+  cells:
+    - case.CELL.active.reactivate
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: "Extra standard-practice decision: reactivating an active case is idempotent."
+  supersedes: null
+- id: D-005
+  q: Q-CASE-3
+  cells:
+    - case.CELL.deprecated.deprecate
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: ""
+  supersedes: null
+- id: D-006
+  q: Q-CASE-4
+  cells:
+    - run_snapshot.CELL.live.case_deprecated_with_results
+  decision: allowed
+  goes_to: removed
+  message: The test without results is removed from the open run.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Tests with results stay; only tests with no result are removed.
+  supersedes: null
+- id: D-007
+  q: Q-CASE-4
+  cells:
+    - run_snapshot.CELL.frozen.case_deleted
+    - run_snapshot.CELL.frozen.case_deprecated_with_results
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Keep tests that already have results (or are frozen) in the open run; the case is excluded from new runs only.
+  supersedes: null
+- id: D-008
+  q: Q-CASE-5
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Manual deprecate keeps the test in open runs; only new runs exclude the case.
+  supersedes: null
+- id: D-009
+  q: Q-CASE-6
+  cells:
+    - case.CELL.deprecated.move_case
+  decision: allowed
+  goes_to: deprecated
+  message: The case appears in the new section; no new version; audit-logged.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: "A move creates no version. Extra standard-practice decision: a deprecated case may also be moved."
+  supersedes: null
+- id: D-010
+  q: Q-CASE-7
+  cells:
+    - case.CELL.deleted.import_update
+  decision: allowed
+  goes_to: deleted
+  message: A new case is created with a new ref.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Refs are never reused; summary counts it as created; the deleted case stays deleted.
+  supersedes: null
+- id: D-011
+  q: Q-CASE-8
+  cells:
+    - case.CELL.deprecated.import_update
+  decision: allowed
+  goes_to: deprecated
+  message: The case is updated and stays deprecated.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Import never changes the deprecated flag.
+  supersedes: null
+- id: D-012
+  q: Q-CASE-9
+  cells: []
+  decision: blocked
+  message: This test changed while you were working. Reload and try again.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Stale refusal when the edit won the race.
+  supersedes: null
+- id: D-013
+  q: Q-CASE-10
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Admin and manager only; testers use the editor.
+  supersedes: null
+- id: D-014
+  q: Q-CASE-11
+  cells:
+    - case.CELL.deleted.restore_version
+  decision: blocked
+  message: Not found
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Record is gone.
+  supersedes: null
+- id: D-015
+  q: Q-CASE-11
+  cells:
+    - run_snapshot.CELL.removed.first_result
+  decision: blocked
+  message: This test was removed from the run.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Consistent with Q-RES-8.
+  supersedes: null
+- id: D-016
+  q: Q-CASE-11
+  cells:
+    - run_snapshot.CELL.removed.case_edited
+    - run_snapshot.CELL.removed.run_closed
+    - run_snapshot.CELL.removed.case_deleted
+    - run_snapshot.CELL.removed.case_deprecated_with_results
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Nothing left to change on a removed test.
+  supersedes: null

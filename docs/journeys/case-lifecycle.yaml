@@ -1,0 +1,248 @@
+# TestBuddy journey map 3: a test case (create, version, deprecate, delete) and its snapshot inside runs.
+# DRAFT by the AI. A cell is pre-decided ONLY where the spec states the rule; the spec file and
+# section are cited in `ref`. Every other cell is `decision: open` and points at a question (q:)
+# with a recommended answer under `suggestion`. The business owner decides every open cell.
+kit: journey-mapping tool/v0
+product: TestBuddy - cases and run snapshots
+decisions: ./case-lifecycle.decisions.yaml
+
+actors:
+  - { id: admin,   name: Project admin,   group: project role }
+  - { id: manager, name: Project manager, group: project role }
+  - { id: tester,  name: Project tester,  group: project role }
+  - { id: viewer,  name: Project viewer,  group: project role }
+  - { id: ci_token, name: CI service token (acts as the mapping's run_as user) }
+  - { id: mcp_agent, name: "MCP agent (later, M3b; acts with the caller's token)" }
+  - { id: system,  name: "System (hooks, links)" }
+
+effects:
+  audit: { failure: atomic, src: doc, ref: "docs/database-schema.md Snapshot policy ('Created inside the transaction by the hook'); openapi /add_case ('atomically; writes audit_logs')" }
+
+not_modelled:
+  - { id: NM-1, area: contract, what: "Case ref format {prefix}-C{counter}, atomic increment, never reused after delete (schema 'Case numbering'). Tested as a data/contract rule, not a state.", owner: integration test }
+  - { id: NM-2, area: contract, what: "Direct client delete on test_cases through the native API is rejected (delete rule null); only delete_case works.", owner: API rule test }
+  - { id: NM-3, area: contract, what: "Suite delete is admin-only, audit-logged, and refused when it would orphan results unless ?force=true. Modelled here only as the cascade event delete_suite.", owner: integration test }
+  - { id: NM-4, area: other, what: "Tags, steps edit/reorder, section move and filters. Steps edit goes through update_case.", owner: UI test }
+  - { id: NM-5, area: other, what: "MCP agent acts under the caller's token and role (ADR 0003); agent auth TBD. Actor declared, fires no event.", owner: owner decision before M3b }
+
+questions:
+  - id: Q-CASE-1
+    title: Edit a deprecated case
+    priority: 2
+    record: case
+    who: admin, manager, tester
+    today: "Deprecated cases are dimmed, hidden unless filtered, and excluded from new runs. Nothing says whether they can still be edited."
+    options: "Allowed (new version, stays deprecated) or blocked until reactivated."
+    suggestion: "Allowed: a new version is created and the case stays deprecated (history and fixes remain possible)."
+    owner: Owner
+  - id: Q-CASE-2
+    title: Reactivate a deprecated case
+    priority: 1
+    record: case
+    who: admin, manager, tester
+    today: "Spec lets a case be deprecated manually or by delete_case. No way back is described, in either the API or DESIGN."
+    options: "Allowed (who, and does it add a version?) or not possible."
+    suggestion: "Allowed for tester and above, no new version, audit-logged (deprecate and reactivate are reversible flags, unlike close_run)."
+    owner: Owner
+  - id: Q-CASE-3
+    title: Deprecate an already deprecated case
+    priority: 3
+    record: case
+    who: admin, manager, tester
+    today: "Not described."
+    options: "Ignored or blocked."
+    suggestion: "Ignored (idempotent)."
+    owner: Owner
+  - id: Q-CASE-4
+    title: Deleting a case that is frozen in an open run
+    priority: 1
+    record: run snapshot
+    who: admin, manager, tester
+    today: "SPEC CONFLICT. schema Delete rules item 2: a case with results is deprecated and 'removed from open runs', and in the same sentence 'results, test_run_cases and case_snapshot stay'. A test in an open run that already has a result cannot both be removed and stay."
+    options: "Keep the test (with its results) in the open run and only exclude the case from NEW runs, or remove the test from the open run and keep its results as history."
+    suggestion: "Keep the tests that already have results in the open run (so the run stays complete and closable); remove only tests with no result. 'Removed from open runs' then means 'tests without results'."
+    owner: Owner
+  - id: Q-CASE-5
+    title: Manual deprecate - does it remove the case from open runs
+    priority: 2
+    record: run snapshot
+    who: admin, manager, tester
+    today: "Spec says deprecated cases are excluded from NEW runs. Removal from open runs is stated only for delete_case when results exist."
+    options: "Open runs keep the test, or the test (without results) is removed."
+    suggestion: "Open runs keep the test; only new runs exclude it. Manual deprecate should not silently change a running test run."
+    owner: Owner
+  - id: Q-CASE-6
+    title: Does moving a case to another section create a version
+    priority: 3
+    record: case
+    who: admin, manager, tester
+    today: "DESIGN section 8 lists 'move' for tester and above. Schema says every update_case creates a version; move is not said to be an update_case."
+    options: "Move creates a version, or it does not."
+    suggestion: "No new version (location is not content); audit-logged. Suite denormalisation is kept in sync by the hook."
+    owner: Owner
+  - id: Q-CASE-7
+    title: Import a case whose source_key matched a hard-deleted case
+    priority: 2
+    record: case
+    who: admin, manager
+    today: "import_cases updates an existing case with the same source_key. After a hard delete there is no case with that key."
+    options: "Create a fresh case with a new ref, or refuse and report."
+    suggestion: "Create a fresh case with a new ref (refs are never reused); the summary counts it as created."
+    owner: Owner
+  - id: Q-CASE-8
+    title: Import update of a deprecated case
+    priority: 3
+    record: case
+    who: admin, manager
+    today: "Not described."
+    options: "Update and keep deprecated, update and reactivate, or skip with a warning."
+    suggestion: "Update and keep it deprecated (import never changes the deprecated flag)."
+    owner: Owner
+  - id: Q-CASE-9
+    title: Result posted to a test while its case snapshot is refreshed
+    priority: 3
+    record: run snapshot
+    who: system
+    today: "Snapshot is refreshed while no result exists and frozen once one exists. Two simultaneous actions (edit case, first result) have no stated winner."
+    options: "Last write wins, or the result records the version it was entered against and the edit bumps the test version."
+    suggestion: "The result records the snapshot version the tester saw; if the edit won, the save is refused as stale (matches openapi 'version stale')."
+    owner: Owner
+  - id: Q-CASE-11
+    title: Events that cannot normally happen (confirm the answer once)
+    priority: 3
+    record: case and run snapshot
+    who: any
+    today: "Not described. Examples: restore, deprecate or move a case that no longer exists; a first result or case edit on a test that was already removed from the run; closing a run whose snapshot is already frozen; deleting a suite that no longer holds the case."
+    options: "Confirm one answer for the whole group: ignored (nothing happens) or blocked with 'Not found'."
+    suggestion: "Blocked with 'Not found' when the record is gone; ignored when the state already holds (frozen snapshot on run close, removed test on case events)."
+    owner: Owner
+  - id: Q-CASE-10
+    title: Who may import cases
+    priority: 2
+    record: case
+    who: admin, manager, tester
+    today: "DESIGN section 8: Settings import is admin and manager. openapi import_cases has a 403 and no role. Drafted as admin and manager."
+    options: "Admin and manager, or testers as well."
+    suggestion: "Admin and manager (as the spec table says); testers use the editor."
+    owner: Owner
+
+entities:
+  - id: case
+    name: Test case
+    tier: A
+    src: doc
+    states: [active, deprecated, deleted]
+    initial: active
+    terminal: [deleted]
+    create: { event: add_case, actors: [admin, manager, tester], to: active, guards: [title_present, section_exists] }
+    events:
+      add_case:        { actors: [admin, manager, tester], name: Create a case (ref is assigned) }
+      update_case:     { actors: [admin, manager, tester], name: Save an edit (creates a version) }
+      restore_version: { actors: [admin, manager, tester], name: Restore an older version as a new version }
+      deprecate:       { actors: [admin, manager, tester], name: Deprecate the case }
+      reactivate:      { actors: [admin, manager, tester], name: Reactivate a deprecated case }
+      move_case:       { actors: [admin, manager, tester], name: Move to another section }
+      delete_case:     { actors: [admin, manager, tester], name: Delete the case (delete_case) }
+      add_to_run:      { actors: [admin, manager, tester], name: Add the case to a run }
+      import_update:   { actors: [admin, manager], name: Import payload with the same source_key }
+      delete_suite:    { actors: [admin], name: Delete the suite that holds the case (cascade) }
+    guards:
+      title_present:
+        description: Title is filled in
+        false_case: A case with no title
+        message: "Field :title is a required field."
+        src: doc
+        ref: "docs/api/openapi.yaml Error example; schema test_cases.title required"
+      section_exists:
+        description: The section exists and belongs to the suite
+        false_case: A section id from another project or suite
+        src: doc
+        ref: "docs/database-schema.md test_cases.suite (hook rejects mismatches)"
+      suite_delete_allowed:
+        description: The suite has no results, or the admin passed force=true
+        false_case: Suite with results and no force
+        src: doc
+        ref: "docs/database-schema.md Delete rules (suite delete refused 'unless ?force=true')"
+    transitions:
+      - { id: CAS-1, from: active, on: update_case, to: active, effects: [audit], expect: "A new version (n+1) with a full snapshot of the case and steps is stored; results already recorded keep their old version", src: doc, ref: "docs/database-schema.md Snapshot policy; docs/api/openapi.yaml /update_case" }
+      - { id: CAS-2, from: active, on: restore_version, to: active, effects: [audit], expect: "The old content becomes a new version; no version is overwritten", src: doc, ref: "docs/design/DESIGN.md 6.5 History ('Restore as new version', tester+)" }
+      - { id: CAS-3, from: active, on: deprecate, to: deprecated, effects: [audit], expect: "Case is dimmed with a Deprecated badge and cannot be added to new runs", src: doc, ref: "docs/database-schema.md test_cases.deprecated ('or manually'); DESIGN section 8", q: Q-CASE-5 }
+      - { id: CAS-4, from: [active, deprecated], on: delete_case, to: deleted, when: "case has no results", effects: [audit], expect: "outcome 'deleted': versions, steps and tags are deleted, the case is removed from open runs, the ref is never reused", src: doc, ref: "docs/database-schema.md Delete rules item 1; docs/api/openapi.yaml /delete_case" }
+      - { id: CAS-5, from: active, on: delete_case, to: deprecated, when: "case has results", effects: [audit], expect: "outcome 'deprecated' with reason; results and snapshots stay", src: doc, ref: "docs/database-schema.md Delete rules item 2; docs/api/openapi.yaml /delete_case", q: Q-CASE-4 }
+      - { id: CAS-6, from: deprecated, on: delete_case, to: deprecated, when: "case has results", effects: [audit], expect: "outcome 'deprecated'; nothing else changes", src: doc, ref: "docs/api/openapi.yaml /delete_case ('Has results: sets deprecated=true')" }
+      - { id: CAS-7, from: active, on: add_to_run, to: active, effects: [audit], expect: "A test is created in the run with the case snapshot at the current version", src: doc, ref: "docs/database-schema.md Snapshot policy; openapi /add_case_to_run" }
+      - { id: CAS-8, from: active, on: move_case, to: active, effects: [audit], expect: "The case appears in the new section", src: doc, ref: "docs/design/DESIGN.md section 8 (move)", q: Q-CASE-6 }
+      - { id: CAS-9, from: active, on: import_update, to: active, when: "payload content differs from the stored case", effects: [audit], expect: "A new version is created; the case keeps its ref", src: doc, ref: "docs/api/openapi.yaml /import_cases ('updated (new version) only if content changed')" }
+      - { id: CAS-10, from: active, on: import_update, to: active, when: "payload content is identical", expect: "Nothing changes; counted as skipped in the summary", src: doc, ref: "docs/api/openapi.yaml /import_cases" }
+      - { id: CAS-11, from: [active, deprecated], on: delete_suite, to: deleted, guards: [suite_delete_allowed], effects: [audit], expect: "The case and its versions, steps and tags are removed; results keep their snapshot but their case link becomes empty", src: doc, ref: "docs/database-schema.md Delete rules (suite cascade; ADMIN only, audit-logged)" }
+    cells:
+      - { state: deprecated, on: update_case,     decision: open, q: Q-CASE-1 }
+      - { state: deprecated, on: restore_version, decision: open, q: Q-CASE-1 }
+      - { state: deprecated, on: move_case,       decision: open, q: Q-CASE-6 }
+      - { state: deprecated, on: deprecate,       decision: open, q: Q-CASE-3 }
+      - { state: active,     on: reactivate,      decision: open, q: Q-CASE-2 }
+      - { state: deprecated, on: reactivate,      decision: open, q: Q-CASE-2 }
+      - { state: deprecated, on: add_to_run,      decision: rejected, message: "Deprecated cases cannot be added to a run.", src: doc, ref: "docs/api/openapi.yaml /add_case_to_run ('Deprecated cases rejected'); DESIGN 6.9 (cannot be selected); message wording is a draft" }
+      - { state: deprecated, on: import_update,   decision: open, q: Q-CASE-8 }
+      - { state: deleted, on: update_case,     decision: rejected, message: "Not found", src: doc, ref: "docs/api/openapi.yaml /update_case 404; DESIGN section 9" }
+      - { state: deleted, on: delete_case,     decision: rejected, message: "Not found", src: doc, ref: "docs/api/openapi.yaml /delete_case 404; DESIGN section 9" }
+      - { state: deleted, on: restore_version, decision: open, q: Q-CASE-11 }
+      - { state: deleted, on: deprecate,       decision: rejected, message: "Not found", src: doc, ref: "same" }
+      - { state: deleted, on: reactivate,      decision: rejected, message: "Not found", src: doc, ref: "same" }
+      - { state: deleted, on: move_case,       decision: rejected, message: "Not found", src: doc, ref: "same" }
+      - { state: deleted, on: add_to_run,      decision: rejected, message: "Not found", src: doc, ref: "same" }
+      - { state: deleted, on: import_update,   decision: open, q: Q-CASE-7 }
+      - { state: deleted, on: delete_suite,    decision: ignored, src: doc, ref: "the case is already gone; the cascade has nothing to delete" }
+
+  - id: run_snapshot
+    name: Test snapshot inside a run
+    tier: A
+    src: doc
+    states: [live, frozen, removed]
+    initial: live
+    terminal: [removed]
+    resting: [frozen]
+    create: { event: snapshot_added, actors: [system], to: live }
+    events:
+      snapshot_added:  { actors: [system], trigger: link, name: Case was added to a run (snapshot taken) }
+      case_edited:     { actors: [system], trigger: link, name: The case got a new version }
+      first_result:    { actors: [admin, manager, tester, ci_token], name: First result is recorded on the test }
+      run_closed:      { actors: [system], name: The run was closed }
+      case_deleted:    { actors: [system], trigger: link, name: "Case was deleted (no results) or removed from open runs" }
+      case_deprecated_with_results: { actors: [system], trigger: link, name: "Case with results was 'deleted' (deprecated)" }
+    transitions:
+      - { id: SNP-1, from: live, on: case_edited, to: live, effects: [audit], expect: "case_snapshot is refreshed to the new version and test_run_cases.version is bumped", src: doc, ref: "docs/database-schema.md Snapshot policy ('While a run is open and the case is later edited, the run hook refreshes case_snapshot and bumps version')" }
+      - { id: SNP-2, from: live, on: first_result, to: frozen, expect: "The snapshot is frozen at the version the result was recorded against", src: doc, ref: "docs/database-schema.md Snapshot policy ('Once results exist for that test, the snapshot is frozen')" }
+      - { id: SNP-3, from: live, on: run_closed, to: frozen, expect: "All snapshots in the run are frozen", src: doc, ref: "docs/api/openapi.yaml /close_run ('Freezes all snapshots')" }
+      - { id: SNP-4, from: live, on: case_deleted, to: removed, expect: "The test row is deleted from the open run", src: doc, ref: "docs/database-schema.md Delete rules item 1" }
+    cells:
+      - { state: frozen, on: case_edited, decision: ignored, src: doc, ref: "docs/database-schema.md Snapshot policy (frozen once results exist); DESIGN 6.5 banner 'A newer version exists. View latest'" }
+      - { state: removed, on: case_edited, decision: open, q: Q-CASE-11 }
+      - { state: frozen,  on: first_result, decision: ignored, src: doc, ref: "later results do not change the frozen snapshot" }
+      - { state: removed, on: first_result, decision: open, q: Q-CASE-11 }
+      - { state: frozen,  on: run_closed, decision: ignored, src: doc, ref: "already frozen" }
+      - { state: removed, on: run_closed, decision: open, q: Q-CASE-11 }
+      - { state: frozen,  on: case_deleted, decision: open, q: Q-CASE-4 }
+      - { state: removed, on: case_deleted, decision: open, q: Q-CASE-11 }
+      - { state: live,    on: case_deprecated_with_results, decision: open, q: Q-CASE-4 }
+      - { state: frozen,  on: case_deprecated_with_results, decision: open, q: Q-CASE-4 }
+      - { state: removed, on: case_deprecated_with_results, decision: open, q: Q-CASE-11 }
+
+links:
+  - { id: LNK-1, when: { entity: case, transition: CAS-7 },  then: { entity: run_snapshot, event: snapshot_added }, src: doc }
+  - { id: LNK-2, when: { entity: case, transition: CAS-1 },  then: { entity: run_snapshot, event: case_edited }, src: doc }
+  - { id: LNK-3, when: { entity: case, transition: CAS-4 },  then: { entity: run_snapshot, event: case_deleted }, src: doc }
+  - { id: LNK-4, when: { entity: case, transition: CAS-5 },  then: { entity: run_snapshot, event: case_deprecated_with_results }, src: doc }
+
+journeys:
+  - id: J-1
+    name: Tester edits a case, then deletes it before any result
+    role: tester
+    tier: A
+    start: { case: active, run_snapshot: live }
+    steps:
+      - { do: case.CAS-1, screen: "/p/{projectId}/cases?case={id}" }
+      - { do: "case.CAS-4@active", screen: "/p/{projectId}/cases?case={id}" }
+    end: { case: deleted, run_snapshot: removed }
+
+walk_unwalked: true

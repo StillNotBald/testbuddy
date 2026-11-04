@@ -1,0 +1,69 @@
+# decisions.yaml: the owner's answers, appended by `journey-mapping tool decide`. Append-only; the map itself is never edited.
+- id: D-001
+  q: Q-RUN-1
+  cells:
+    - run.CELL.closed.close_run
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Second close_run returns the closed run unchanged; no second audit row.
+  supersedes: null
+- id: D-002
+  q: Q-RUN-2
+  cells:
+    - plan.CELL.completed.close_plan
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Repeat close_plan is idempotent.
+  supersedes: null
+- id: D-003
+  q: Q-RUN-3
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Admin and manager only may close a plan.
+  supersedes: null
+- id: D-004
+  q: Q-RUN-4
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Skip duplicates and return only the newly added tests.
+  supersedes: null
+- id: D-005
+  q: Q-RUN-5
+  cells: []
+  decision: blocked
+  message: This test already has results. Results cannot be removed from an open run.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: ""
+  supersedes: null
+- id: D-006
+  q: Q-RUN-6
+  cells: []
+  decision: blocked
+  message: This plan is completed. Runs cannot be added to it.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Same rule as add_plan_entry.
+  supersedes: null
+- id: D-007
+  q: Q-RUN-7
+  cells: []
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: "Manual only: closing the last open run does not complete the plan; UI shows an all-runs-closed hint."
+  supersedes: null
+- id: D-008
+  q: Q-RUN-8
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: MCP agent has the same role as the token user, never higher; agent logged as actor in audit_logs.
+  supersedes: null

@@ -1,0 +1,202 @@
+# decisions.yaml: the owner's answers, appended by `journey-mapping tool decide`. Append-only; the map itself is never edited.
+- id: D-001
+  q: Q-CI-1
+  cells:
+    - execution.CELL.completed.repost_changed
+    - execution.CELL.in_progress.repost_changed
+    - execution.CELL.failed.repost_changed
+  decision: blocked
+  message: This execution id was already used with different results.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: HTTP 409; an identical re-POST still returns the stored summary.
+  supersedes: null
+- id: D-002
+  q: Q-CI-2
+  cells:
+    - execution.CELL.failed.repost
+  decision: allowed
+  goes_to: in_progress
+  message: The batch is reprocessed under the same execution record.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Retry allowed after a failed execution.
+  supersedes: null
+- id: D-003
+  q: Q-CI-3
+  cells:
+    - execution.CELL.in_progress.repost
+  decision: blocked
+  message: This execution is still being processed. Try again shortly.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: HTTP 409.
+  supersedes: null
+- id: D-004
+  q: Q-CI-4
+  cells:
+    - execution.CELL.in_progress.timeout
+  decision: allowed
+  goes_to: failed
+  message: Execution shows Failed (timed out after 15 minutes); the client may retry.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: 15-minute timeout.
+  supersedes: null
+- id: D-005
+  q: Q-CI-4
+  cells:
+    - execution.CELL.completed.timeout
+    - execution.CELL.failed.timeout
+    - execution.CELL.completed.finish_ok
+    - execution.CELL.failed.finish_ok
+    - execution.CELL.completed.finish_failed
+    - execution.CELL.failed.finish_failed
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: "Extra standard-practice decision: late system events on a finished execution are ignored."
+  supersedes: null
+- id: D-006
+  q: Q-CI-5
+  cells:
+    - item.CELL.pending.process_unmatched
+  decision: allowed
+  goes_to: unmatched
+  message: The item is skipped and listed as unmatched in the execution summary.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Per-mapping setting on_unmatched = skip|reject, default skip.
+  supersedes: null
+- id: D-007
+  q: Q-CI-6
+  cells:
+    - item.CELL.pending.process_deprecated
+  decision: allowed
+  goes_to: skipped
+  message: The item is skipped with a warning in the execution summary.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Per-mapping setting on_deprecated = skip|reject, default skip.
+  supersedes: null
+- id: D-008
+  q: Q-CI-7
+  cells:
+    - item.CELL.pending.process_bad_status
+  decision: allowed
+  goes_to: rejected
+  message: The whole batch is refused with errors[] (400); nothing is recorded.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Malformed input is a client bug and fails the batch.
+  supersedes: null
+- id: D-009
+  q: Q-CI-8
+  cells:
+    - item.CELL.pending.process_run_closed
+  decision: allowed
+  goes_to: rejected
+  message: "run_id is required; a closed run is refused with: Run is closed. Results can no longer be changed."
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: run_id required for v1.
+  supersedes: null
+- id: D-010
+  q: Q-CI-9
+  cells: []
+  decision: blocked
+  message: This token does not belong to this project.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: HTTP 403.
+  supersedes: null
+- id: D-011
+  q: Q-CI-10
+  cells:
+    - token.CELL.revoked.revoke_token
+    - token.CELL.active.create_token
+    - token.CELL.revoked.create_token
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Many tokens per mapping (separate collection); create and revoke are admin only; a mapping starts with no token. Creating a token makes a new record, revoking a revoked token changes nothing.
+  supersedes: null
+- id: D-012
+  q: Q-CI-11
+  cells: []
+  decision: blocked
+  message: The CI user cannot write results.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: HTTP 403; checked at post time when run_as is inactive or not tester, manager or admin.
+  supersedes: null
+- id: D-013
+  q: Q-CI-12
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Admin, manager and tester may use the bearer path of import_results_file; viewer refused.
+  supersedes: null
+- id: D-014
+  q: Q-CI-13
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: Idempotency key at batch level only; item-level external_execution_id removed.
+  supersedes: null
+- id: D-015
+  q: Q-CI-14
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: "Audit write is atomic: if it fails nothing is recorded."
+  supersedes: null
+- id: D-016
+  q: Q-CI-15
+  cells:
+    - token.CELL.revoked.present_token
+  decision: blocked
+  message: Invalid or expired token.
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: 401 for missing, invalid, revoked or expired token; 403 for a valid token that is not allowed.
+  supersedes: null
+- id: D-017
+  q: Q-CI-16
+  cells: []
+  decision: allowed
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: "Append: results are append-only history; the latest result wins."
+  supersedes: null
+- id: D-018
+  q: Q-CI-17
+  cells:
+    - item.CELL.recorded.process_ok
+    - item.CELL.unmatched.process_ok
+    - item.CELL.skipped.process_ok
+    - item.CELL.rejected.process_ok
+    - item.CELL.recorded.process_unmatched
+    - item.CELL.unmatched.process_unmatched
+    - item.CELL.skipped.process_unmatched
+    - item.CELL.rejected.process_unmatched
+    - item.CELL.recorded.process_deprecated
+    - item.CELL.unmatched.process_deprecated
+    - item.CELL.skipped.process_deprecated
+    - item.CELL.rejected.process_deprecated
+    - item.CELL.recorded.process_bad_status
+    - item.CELL.unmatched.process_bad_status
+    - item.CELL.skipped.process_bad_status
+    - item.CELL.rejected.process_bad_status
+    - item.CELL.recorded.process_run_closed
+    - item.CELL.unmatched.process_run_closed
+    - item.CELL.skipped.process_run_closed
+    - item.CELL.rejected.process_run_closed
+  decision: ignored
+  by: owner (standard practice, 2026-11-04)
+  date: 2026-11-04
+  note: An item that already has an outcome keeps it.
+  supersedes: null

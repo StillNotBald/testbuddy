@@ -19,7 +19,7 @@ jobs:
       # Action versions are major tags (v4) that exist upstream; pin to full SHAs before relying on this in production.
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
